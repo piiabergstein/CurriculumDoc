@@ -15,7 +15,7 @@ const back = (id: string) => revalidatePath(`/haldus/s/${id}`);
 
 /** Kutsekirja aadress: APP_URL või (kui seadistamata) päringu enda aadress. */
 async function appBaseUrl(): Promise<string> {
-  const env = process.env.APP_URL?.trim().replace(//+$/, "");
+  const env = process.env.APP_URL?.trim().replace(/\/+$/, "");
   if (env) return env;
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host");
