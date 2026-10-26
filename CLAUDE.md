@@ -16,3 +16,4 @@
 - Do not set up a local database or a local server.
 - Before every push, run `npm run build` to make sure the app builds.
 - After each finished task, commit and push to GitHub so that Render deploys the new version.
+- If Claude cannot push, use the VS Code Source Control view: enter a commit message, click **COMMIT**, then **SYNC CHANGES**.
