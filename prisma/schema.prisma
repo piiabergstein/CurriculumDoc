@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+}
+
+enum WorkflowState {
+  DRAFT              // Mustand
+  DOCTOR_REVIEW      // Arsti ülevaatusel
+  DOCTOR_APPROVED    // Arsti kinnitatud
+  MARKETING_REVIEW   // Turunduse ülevaatusel
+  RETURNED           // Arstile parandamiseks tagastatud
+  READY_TO_PUBLISH   // Valmis käsitsi avaldamiseks
+  PUBLISHED          // Halduri poolt veebis avaldatuks märgitud
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  role         Role      @default(MANAGER)
+  passwordHash String
+  totpSecret   String?
+  totpEnabled  Boolean   @default(false)
+  active       Boolean   @default(true)
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime  @default(now())
+  sessions     StaffSession[]
+  specialists  Specialist[] @relation("ResponsibleManager")
+}
+
+model StaffSession {
+  id        String   @id // sha256 of cookie token
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Specialist {
+  id               String        @id @default(cuid())
+  name             String
+  contactEmail     String        // halduri kontrollitud, ei avaldata
+  contactVerified  Boolean       @default(false)
+  group            String        @default("default") // spetsialistirühm reeglite/fotostiili jaoks
+  responsibleId    String?
+  responsible      User?         @relation("ResponsibleManager", fields: [responsibleId], references: [id])
+  publicUrls       Json          @default("{}") // { et?: string, en?: string, ru?: string }
+  workflowState    WorkflowState @default(DRAFT)
+  lastDoctorReviewAt DateTime?   // viimane arsti kinnitus või "info on endiselt õige"
+  archived         Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  draft          ProfileDraft?
+  invites        InviteCode[]
+  doctorSessions DoctorSession[]
+  provenance     FactProvenance[]
+  conflicts      ImportConflict[]
+  versions       ProfileVersion[]
+  approvals      Approval[]
+  photos         PhotoVersion[]
+  publications   PublicationMark[]
+  notes          InternalNote[]
+  activities     ActivityLog[]
+  jobs           Job[]
+  tasks          ManagerTask[]
+  imports        ImportRecord[]
+}
+
+model InviteCode {
+  id             String    @id @default(cuid())
+  specialistId   String
+  specialist     Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  codeHash       String    // HMAC(code), kood ise pole andmebaasis
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  failedAttempts Int       @default(0)
+  lockedAt       DateTime?
+  purpose        String    @default("invite") // invite | review
+  sentMarkedAt   DateTime? // haldur märkis käsitsi saadetuks
+  sentMarkedBy   String?
+  lastUsedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  createdBy      String
+}
+
+model DoctorSession {
+  id           String   @id // sha256 of cookie token
+  specialistId String
+  specialist   Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  inviteId     String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+}
+
+model RateLimit {
+  key       String   @id
+  count     Int
+  resetAt   DateTime
+}
+
+// Töökoopia. revision = optimistlik lukk samaaegsete muudatuste vastu.
+model ProfileDraft {
+  specialistId  String   @id
+  specialist    Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  revision      Int      @default(0)
+  content       Json     // eestikeelne struktureeritud profiil (ProfileContent)
+  fieldMeta     Json     @default("{}") // { [field]: { source, manual } }
+  translations  Json     @default("{}") // { en?: Translation, ru?: Translation }
+  aiResult      Json?    // viimane AI tulemus: vastuolud, puuduvad täpsustused, muudatused
+  selectedPhotoId String?
+  freeText      String   @default("")
+  wizardStep    Int      @default(1)
+  basedOnVersionId String?
+  updatedAt     DateTime @updatedAt
+  updatedBy     String   @default("")
+}
+
+model FactProvenance {
+  id           String   @id @default(cuid())
+  specialistId String
+  specialist   Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  field        String
+  source       String   // FORM | FREETEXT | CV_FILE | AI | MANAGER
+  sourceRef    String?  // failinimi
+  excerpt      String?
+  createdAt    DateTime @default(now())
+}
+
+model ImportRecord {
+  id           String   @id @default(cuid())
+  specialistId String
+  specialist   Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  kind         String   // FREETEXT | CV_FILE
+  filename     String?
+  mimeType     String?
+  extractedText String  // failist loetud tekst (faili ennast ei säilitata)
+  createdAt    DateTime @default(now())
+}
+
+model ImportConflict {
+  id           String   @id @default(cuid())
+  specialistId String
+  specialist   Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  field        String
+  currentValue Json
+  importedValue Json
+  sourceRef    String?
+  excerpt      String?
+  resolvedAt   DateTime?
+  resolution   String?  // keep | take
+  createdAt    DateTime @default(now())
+}
+
+// Muutumatu kinnitatud/esitatud versioon
+model ProfileVersion {
+  id           String   @id @default(cuid())
+  specialistId String
+  specialist   Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  number       Int
+  contentEt    Json
+  contentEn    Json?
+  contentRu    Json?
+  photoVersionId String?
+  formattingOnlyFromId String? // halduri pelgalt vormistuslik muudatus kinnitatud versioonist
+  createdAt    DateTime @default(now())
+  createdBy    String
+  approvals    Approval[]
+  publications PublicationMark[]
+
+  @@unique([specialistId, number])
+}
+
+model Approval {
+  id            String   @id @default(cuid())
+  specialistId  String
+  specialist    Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  versionId     String
+  version       ProfileVersion @relation(fields: [versionId], references: [id])
+  approverType  String   // DOCTOR
+  approverName  String
+  approverRole  String
+  statement     String
+  statementVersion String
+  languages     String[] // kinnitatud keeled
+  photoVersionId String?
+  snapshot      Json     // muutumatu koopia
+  kind          String   @default("APPROVE") // APPROVE | STILL_VALID
+  createdAt     DateTime @default(now())
+}
+
+model PhotoVersion {
+  id           String   @id @default(cuid())
+  specialistId String
+  specialist   Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  kind         String   // ORIGINAL | PROCESSED | PROFESSIONAL
+  parentId     String?
+  data         Bytes
+  mimeType     String
+  width        Int
+  height       Int
+  settings     Json?
+  qualityNotes Json?
+  approvedAt   DateTime?
+  createdBy    String
+  createdAt    DateTime @default(now())
+}
+
+model PublicationMark {
+  id           String   @id @default(cuid())
+  specialistId String
+  specialist   Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  versionId    String
+  version      ProfileVersion @relation(fields: [versionId], references: [id])
+  publishedBy  String
+  publishedAt  DateTime @default(now())
+  urls         Json     @default("{}")
+}
+
+model InternalNote {
+  id           String   @id @default(cuid())
+  specialistId String
+  specialist   Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  author       String
+  text         String
+  createdAt    DateTime @default(now())
+}
+
+model ActivityLog {
+  id           String   @id @default(cuid())
+  specialistId String?
+  specialist   Specialist? @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  actor        String
+  action       String
+  details      Json?
+  createdAt    DateTime @default(now())
+}
+
+// Halduri tööülesanded (manuaalne kutsumine/meeldetuletus, tõlkeabi, fotoabi, patsiendiandmete kahtlus)
+model ManagerTask {
+  id           String   @id @default(cuid())
+  specialistId String
+  specialist   Specialist @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  type         String
+  dedupeKey    String   @unique
+  details      Json?
+  doneAt       DateTime?
+  createdAt    DateTime @default(now())
+}
+
+// Püsiv taustatööde järjekord
+model Job {
+  id           String   @id @default(cuid())
+  specialistId String?
+  specialist   Specialist? @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  type         String
+  dedupeKey    String?  @unique
+  payload      Json
+  status       String   @default("queued") // queued | running | done | failed
+  stage        String?
+  attempts     Int      @default(0)
+  maxAttempts  Int      @default(3)
+  runAfter     DateTime @default(now())
+  lockedUntil  DateTime?
+  error        String?
+  result       Json?
+  durationMs   Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status, runAfter])
+}
+
+model Setting {
+  key   String @id
+  value Json
+}
+
+model GlossaryTerm {
+  id String @id @default(cuid())
+  et String
+  en String
+  ru String
+  note String?
+}
