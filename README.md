@@ -42,9 +42,20 @@ Arstide ja spetsialistide veebiprofiilide kogumine, AI-korrastus ja -tõlge, ars
 
 ## Esimene administraator
 
-- **Renderis:** sea `BOOTSTRAP_ADMIN_EMAIL` ja `BOOTSTRAP_ADMIN_PASSWORD` (vähemalt 12 märki). Administraator luuakse käivitusel ainult siis, kui ühtegi kasutajat veel pole. Pärast esimest sisselogimist eemalda parool keskkonnamuutujatest.
-- **Alternatiiv:** sea oma arvutis `DATABASE_URL` väärtuseks andmebaasi External URL ja käivita `npm run create-admin -- admin@meliva.ee "Nimi"`.
-- Esimesel sisselogimisel (`/haldus/login`) tuleb seadistada autentimisrakendus (2FA). Teised haldurid lisatakse lehel **Seaded → Haldurid**.
+### Renderis seadistamine ja esimene sisselogimine
+
+1. Ava Renderis rakenduse **Web Service → Environment** ning lisa:
+   - `BOOTSTRAP_ADMIN_EMAIL` – administraatori e-posti aadress, millega sisse logid.
+   - `BOOTSTRAP_ADMIN_PASSWORD` – ajutine algparool (vähemalt 12 märki).
+2. Salvesta muutujad ja oota, kuni teenus on käivitunud. Käivitamisel loob rakendus selle e-postiga administraatori ainult siis, kui andmebaasis pole veel ühtegi kasutajat.
+3. Ava brauseris `https://<sinu-teenuse-aadress>/haldus/login` (näiteks `https://xxx.onrender.com/haldus/login`). Sisesta `BOOTSTRAP_ADMIN_EMAIL` ja `BOOTSTRAP_ADMIN_PASSWORD`, seejärel vajuta **Logi sisse**. Esimesel korral jäta autentimisrakenduse koodi väli tühjaks.
+4. Avaneb **Seadista kaheastmeline autentimine** leht. Paigalda telefoni autentimisrakendus, näiteks Google Authenticator või Microsoft Authenticator. Skanni lehel olev QR-kood, sisesta rakenduses kuvatav kood väljale **Kood** ja vajuta **Kinnita**. Hoia QR-kood ja selle all näidatud salavõti privaatsena.
+5. Pärast kinnitamist avaneb haldusvaade. Kontrolli, et saad välja logida ja uuesti sisse logida: edaspidi sisesta sisselogimisel lisaks e-postile ja paroolile ka autentimisrakenduse värske kood.
+6. Kui sisselogimine ja 2FA on kontrollitud, eemalda Renderi keskkonnamuutujatest `BOOTSTRAP_ADMIN_PASSWORD` ning salvesta muudatus. Andmebaasis olev administraator ja parool jäävad alles; algparooli muutujat on vaja ainult konto esmakordseks loomiseks.
+
+Kui administraatorit ei looda, kontrolli, et teenus oleks pärast muutujate lisamist käivitunud, e-post ja parool oleksid õiged ning andmebaasis poleks juba ühtegi kasutajat. Kui kasutaja on juba olemas, lisa järgmised haldurid haldusvaates **Seaded → Haldurid** kaudu.
+
+**Alternatiiv käsurealt:** sea `DATABASE_URL` väärtuseks Renderi andmebaasi External URL ja käivita `npm run create-admin -- admin@meliva.ee "Nimi"`. See käsk loob või uuendab administraatori ning väljastab genereeritud ajutise parooli, kui `ADMIN_PASSWORD` pole määratud. Seejärel logi sisse ülaltoodud sammudega.
 
 ## Kohalik arendus (valikuline)
 

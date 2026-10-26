@@ -7,7 +7,7 @@ import { inviteCodeHash, signUrlToken, verifyUrlToken, sixDigitCode } from "../s
 vi.mock("next/headers", () => ({ cookies: vi.fn(), headers: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("../src/lib/db", () => ({ db: {} }));
-process.env.NODE_ENV = "test";
+(process.env as Record<string, string>).NODE_ENV = "test";
 
 const base = (): ProfileContent => ({ ...emptyProfile(), name: "Test Arst", titles: ["Perearst"], description: "Keskendun laste allergiatele ja astmale, mul on 10 aastat kogemust.", education: [{ from: "2005", to: "2011", ongoing: false, unknown: false, institution: "Tartu Ülikool", degree: "arstiteadus" }] });
 

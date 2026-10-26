@@ -24,12 +24,17 @@ export async function createSpecialistAction(fd: FormData) {
 
 export async function createInviteAction(specialistId: string, purpose: "invite" | "review") {
   const u = await requireStaff();
+  try {
   const sp = await db.specialist.findUniqueOrThrow({ where: { id: specialistId } });
   const { code, invite } = await svc.createInvite(specialistId, u.email, purpose);
   const appUrl = process.env.APP_URL || "";
   if (sp.workflowState === "DRAFT" || sp.workflowState === "PUBLISHED") await db.specialist.update({ where: { id: specialistId }, data: { workflowState: "DOCTOR_REVIEW" } });
   back(specialistId);
-  return { code, email: sp.contactEmail, text: svc.inviteEmailText(sp.name, code, sp.contactEmail, appUrl, purpose, invite.expiresAt), subject: purpose === "review" ? "Palun vaata üle oma profiil Meliva kodulehel" : "Sinu profiil Meliva kodulehel" };
+  return { ok: true as const, code, email: sp.contactEmail, text: svc.inviteEmailText(sp.name, code, sp.contactEmail, appUrl, purpose, invite.expiresAt), subject: purpose === "review" ? "Palun vaata üle oma profiil Meliva kodulehel" : "Sinu profiil Meliva kodulehel" };
+  } catch (e) {
+    console.error(JSON.stringify({ level: "error", event: "invite_failed", specialistId, error: e instanceof Error ? e.message : String(e) }));
+    return { ok: false as const, error: `Kutse loomine ebaõnnestus: ${e instanceof Error ? e.message : "tundmatu viga"}` };
+  }
 }
 
 export async function markInviteSentAction(specialistId: string) {

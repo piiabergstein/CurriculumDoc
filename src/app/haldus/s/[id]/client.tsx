@@ -21,17 +21,30 @@ type Invite = { id: string; createdAt: string; expiresAt: string; revokedAt: str
 export function InvitePanel({ specialistId, invites }: { specialistId: string; invites: Invite[] }) {
   const [mail, setMail] = useState<{ code: string; email: string; text: string; subject: string } | null>(null);
   const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
   const cur = invites.find((i) => !i.revokedAt);
+  const create = async (purpose: "invite" | "review") => {
+    setBusy(true); setErr(""); setMsg("");
+    try {
+      const r = await A.createInviteAction(specialistId, purpose);
+      if (r.ok) setMail(r); else setErr(r.error);
+    } catch (e) {
+      setErr(`Kutse loomine ebaõnnestus: ${e instanceof Error ? e.message : "ühenduse viga"}`);
+    } finally { setBusy(false); }
+  };
   return (
     <div className="card">
       <h2 style={{ marginTop: 0 }}>Kutse ja meeldetuletus</h2>
       <p className="hint">Manuaalne režiim: süsteem ei saada kirju. Loo kood, kopeeri kiri ja saada see oma e-postist kontrollitud aadressile.</p>
       {cur && <p>Aktiivne kood loodud {fmt(cur.createdAt)}, kehtib kuni {fmt(cur.expiresAt)}. {cur.sentMarkedAt ? `Märgitud saadetuks ${fmt(cur.sentMarkedAt)}.` : <span className="badge warn">saatmata</span>} {cur.lastUsedAt && `Viimati kasutatud ${fmt(cur.lastUsedAt)}.`} {cur.lockedAt && <span className="badge err">lukus (liiga palju valesid katseid)</span>}</p>}
       <div className="row">
-        <button type="button" className="small" onClick={async () => setMail(await A.createInviteAction(specialistId, "invite"))}>{cur ? "Loo uus kood (vana tühistub)" : "Loo kutse"}</button>
-        <button type="button" className="small secondary" onClick={async () => setMail(await A.createInviteAction(specialistId, "review"))}>„Vaata profiil üle“ kutse</button>
+        <button type="button" className="small" disabled={busy} onClick={() => create("invite")}>{cur ? "Loo uus kood (vana tühistub)" : "Loo kutse"}</button>
+        <button type="button" className="small secondary" disabled={busy} onClick={() => create("review")}>„Vaata profiil üle“ kutse</button>
         {cur && <button type="button" className="small danger" onClick={() => confirm("Tühistada kood ja lõpetada arsti sessioonid?") && A.revokeInvitesAction(specialistId)}>Tühista kood</button>}
       </div>
+      {busy && <p role="status" className="muted">Loon koodi…</p>}
+      {err && <p role="alert" className="notice err">{err}</p>}
       {mail && (
         <div className="notice" style={{ marginTop: 12 }}>
           <p><strong>Kood: {mail.code}</strong> – näidatakse ainult praegu. Adressaat: <strong>{mail.email}</strong> (kontrolli enne saatmist).</p>
