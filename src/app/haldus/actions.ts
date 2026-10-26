@@ -1,6 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { hash } from "@node-rs/argon2";
 import crypto from "node:crypto";
 import { requireStaff, logoutStaff } from "../../lib/auth";
@@ -11,6 +12,16 @@ import { PhotoStyle } from "../../lib/photo";
 import { type CompletenessRules } from "../../lib/profile";
 
 const back = (id: string) => revalidatePath(`/haldus/s/${id}`);
+
+/** Kutsekirja aadress: APP_URL või (kui seadistamata) päringu enda aadress. */
+async function appBaseUrl(): Promise<string> {
+  const env = process.env.APP_URL?.trim().replace(//+$/, "");
+  if (env) return env;
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return host ? `${proto}://${host}` : "";
+}
 
 export async function createSpecialistAction(fd: FormData) {
   const u = await requireStaff();
@@ -27,7 +38,7 @@ export async function createInviteAction(specialistId: string, purpose: "invite"
   try {
   const sp = await db.specialist.findUniqueOrThrow({ where: { id: specialistId } });
   const { code, invite } = await svc.createInvite(specialistId, u.email, purpose);
-  const appUrl = process.env.APP_URL || "";
+  const appUrl = await appBaseUrl();
   if (sp.workflowState === "DRAFT" || sp.workflowState === "PUBLISHED") await db.specialist.update({ where: { id: specialistId }, data: { workflowState: "DOCTOR_REVIEW" } });
   back(specialistId);
   return { ok: true as const, code, email: sp.contactEmail, text: svc.inviteEmailText(sp.name, code, sp.contactEmail, appUrl, purpose, invite.expiresAt), subject: purpose === "review" ? "Palun vaata üle oma profiil Meliva kodulehel" : "Sinu profiil Meliva kodulehel" };
