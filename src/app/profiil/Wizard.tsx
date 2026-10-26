@@ -103,7 +103,8 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
               <button type="button" className="secondary" onClick={() => act(A.stillValidAction(), "Aitäh! Kinnitasid, et info on endiselt õige.")}>Info on endiselt õige</button>
             </div>
           )}
-          <p><button type="button" onClick={() => go(2)}>Alusta</button></p>
+          <CvUpload act={act} onDone={() => go(2)} />
+          <p><button type="button" onClick={() => go(2)}>{s.jobs.some((j) => j.type === "import") ? "Edasi" : "Alusta ilma CV-ta"}</button></p>
         </div>
       )}
 
@@ -224,6 +225,28 @@ function Conflicts({ s, act }: { s: DoctorState; act: Act }) {
           <div className="row"><button type="button" className="secondary small" onClick={() => act(A.resolveConflictAction(c.id, "keep"))}>Jäta praegune</button><button type="button" className="small" onClick={() => act(A.resolveConflictAction(c.id, "take"))}>Kasuta imporditud</button></div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** CV üleslaadimine kohe esimeses sammus: andmed loetakse taustal välja ja täidavad ainult tühjad väljad. */
+function CvUpload({ act, onDone }: { act: Act; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="notice" style={{ margin: "16px 0" }}>
+      <h2 style={{ marginTop: 0 }}>Kas Sul on CV olemas?</h2>
+      <p>Lae see üles ja me täidame profiili Sinu eest. Hiljem saad kõike üle vaadata ja parandada. Faili ennast ei säilitata – alles jäävad ainult väljaloetud andmed.</p>
+      <form onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        const ok = await act(A.importFileAction(new FormData(e.currentTarget)), "CV saadeti töötlusse. Andmete väljalugemine võtab tavaliselt alla minuti – edenemist näed lehe ülaosas.");
+        setBusy(false);
+        if (ok) onDone();
+      }}>
+        <label htmlFor="cv-start">PDF, DOCX või skannitud CV (pilt), kuni 10 MB</label>
+        <input id="cv-start" name="file" type="file" accept=".pdf,.docx,image/jpeg,image/png,image/webp" required />
+        <p><button disabled={busy}>{busy ? "Laen üles…" : "Lae CV üles ja jätka"}</button></p>
+      </form>
     </div>
   );
 }
