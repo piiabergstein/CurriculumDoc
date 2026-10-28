@@ -170,8 +170,11 @@ export async function resolveConflict(specialistId: string, conflictId: string, 
 }
 
 // ---------------- AI töötlus ----------------
+/** Topeltklõps ei tekita teist tööd, kuid valminud töö järel saab alati uuesti töödelda. */
 export async function startProcessing(specialistId: string, revision: number) {
-  return enqueue("process", { specialistId, revision }, { specialistId, dedupeKey: `process:${specialistId}:${revision}` });
+  const active = await db.job.findFirst({ where: { specialistId, type: "process", status: { in: ["queued", "running"] } } });
+  if (active) return active;
+  return enqueue("process", { specialistId, revision }, { specialistId });
 }
 
 registerJob("process", async (job, stage) => {
