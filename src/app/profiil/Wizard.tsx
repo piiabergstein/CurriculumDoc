@@ -152,7 +152,7 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
                 <div className="grid2">
                   <figure><img className="photo" src={photoUrl(o.id)} alt="Originaalfoto" /><figcaption>{o.kind === "PROFESSIONAL" ? "Professionaalne foto (haldurilt)" : "Originaal"}</figcaption></figure>
                   <div>
-                    {children.length === 0 && <p className="muted">Töödeldud versiooni veel pole.</p>}
+                    {children.length === 0 && o.kind === "ORIGINAL" && <p className="muted">Töödeldud versiooni veel pole.</p>}
                     {children.map((p, i) => (
                       <figure key={p.id} style={{ margin: "0 0 12px" }}>
                         <img className="photo" src={photoUrl(p.id)} alt={`Töödeldud versioon ${i + 1}`} />

@@ -66,7 +66,7 @@ export default async function SpecialistDetail({ params }: { params: Promise<{ i
         <ul>{s.tasks.map((t) => <li key={t.id}>{TASK_LABELS[t.type] ?? t.type} {t.details ? <span className="muted">{JSON.stringify(t.details)}</span> : null} <form action={A.taskDoneAction.bind(null, t.id)} style={{ display: "inline" }}><button className="small secondary">Lahendatud</button></form></li>)}</ul>
       </div>}
 
-      {draftChangedSinceApproval.length > 0 && latestApproved && <div className="notice warn"><strong>Arst on profiili muutnud</strong> pärast versiooni {latestApproved.number} kinnitamist. Muudetud väljad: {draftChangedSinceApproval.map((d) => FIELD_LABELS[d.field]).join(", ")}.</div>}
+      {draftChangedSinceApproval.length > 0 && latestApproved && <div className="notice warn"><strong>Mustandit on muudetud</strong> pärast versiooni {latestApproved.number} kinnitamist (arst, haldur või AI-töötlus – vt tegevuste ajalugu). Muudetud väljad: {draftChangedSinceApproval.map((d) => FIELD_LABELS[d.field]).join(", ")}.</div>}
 
       <div className="grid2">
         <div className="card">
