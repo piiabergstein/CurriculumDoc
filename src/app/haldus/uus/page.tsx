@@ -18,7 +18,7 @@ export default async function NewSpecialist({ searchParams }: { searchParams: Pr
         <input id="email" name="email" type="email" required />
         <label htmlFor="group">Spetsialistirühm</label>
         <input id="group" name="group" defaultValue="default" />
-        <label style={{ fontWeight: 400 }}><input type="checkbox" name="verified" /> Olen kontrollinud, et e-post kuulub sellele spetsialistile</label>
+        <label style={{ fontWeight: 400 }}><input type="checkbox" name="verified" required /> Olen kontrollinud, et e-post kuulub sellele spetsialistile</label>
         <p><button>Loo spetsialist</button></p>
       </form>
     </div>

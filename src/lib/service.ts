@@ -47,7 +47,7 @@ export async function createInvite(specialistId: string, actor: string, purpose:
 }
 
 export function inviteEmailText(name: string, code: string, email: string, appUrl: string, purpose: "invite" | "review", expires: Date) {
-  const intro = purpose === "review" ? "palume Sul üle vaadata oma profiil Meliva kodulehel ja kinnitada, kas info on endiselt õige." : "palume Sul täiendada oma profiili Meliva kodulehe jaoks.";
+  const intro = purpose === "review" ? "palub Sul üle vaadata oma profiili Meliva kodulehel ja kinnitada, kas info on endiselt õige." : "palub Sul täiendada oma profiili Meliva kodulehe jaoks.";
   return `Tere, ${name}!
 
 Meliva turundusmeeskond ${intro}

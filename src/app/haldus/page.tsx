@@ -77,24 +77,24 @@ export default async function StaffHome({ searchParams }: { searchParams: Promis
       </form>
       <ReviewScanButton />
       <div style={{ overflowX: "auto" }}>
-        <table>
+        <table className="list">
           <thead><tr><th>Nimi</th><th>Ametinimetus</th><th>Seis</th><th>Põhiteave</th><th>Foto</th><th>Arsti ülevaatus</th><th>Kutse</th><th>Avaldamata muudatus</th><th>Vastutav</th><th>Avalik profiil</th></tr></thead>
           <tbody>
             {shown.map(({ s, c, findings, due, pendingPublish }) => (
               <tr key={s.id}>
-                <td><Link href={`/haldus/s/${s.id}`}>{s.name}</Link>{s.tasks.length > 0 && <> <span className="badge warn">{s.tasks.length} ülesannet</span></>}</td>
-                <td>{c.titles.join(", ") || <span className="muted">—</span>}</td>
-                <td><span className="badge">{WORKFLOW_LABELS[s.workflowState]}</span></td>
-                <td>
+                <td data-label="Nimi"><Link href={`/haldus/s/${s.id}`}>{s.name}</Link>{s.tasks.length > 0 && <> <span className="badge warn">{s.tasks.length} ülesannet</span></>}</td>
+                <td data-label="Ametinimetus">{c.titles.join(", ") || <span className="muted">—</span>}</td>
+                <td data-label="Seis"><span className="badge">{WORKFLOW_LABELS[s.workflowState]}</span></td>
+                <td data-label="Põhiteave">
                   {isIncomplete(findings) ? <span className="badge err">{findings.filter((f) => f.level !== "observation").map((f) => f.reason).join("; ")}</span> : <span className="badge ok">korras</span>}
                   {obs(findings).length > 0 && <div className="hint">{obs(findings).map((f) => f.reason).join("; ")}</div>}
                 </td>
-                <td>{s.draft?.selectedPhotoId ? <span className="badge ok">valitud</span> : s.photos.length ? <span className="badge warn">valimata</span> : <span className="badge">puudub</span>}</td>
-                <td>{s.lastDoctorReviewAt ? s.lastDoctorReviewAt.toLocaleDateString("et-EE") : "Kinnitamise aeg teadmata"}{due === "due" && <> <span className="badge warn">tähtaeg möödas</span></>}</td>
-                <td>{s.invites[0] ? (s.invites[0].revokedAt ? "tühistatud" : s.invites[0].expiresAt < new Date() ? "aegunud" : s.invites[0].sentMarkedAt ? `saadetud ${s.invites[0].sentMarkedAt.toLocaleDateString("et-EE")}` : "loodud, saatmata") : "kutset pole"}</td>
-                <td>{pendingPublish ? <span className="badge warn">v{s.versions[0].number} ootab</span> : "—"}</td>
-                <td>{s.responsible?.name ?? "—"}</td>
-                <td>{Object.entries((s.publicUrls ?? {}) as Record<string, string>).filter(([, v]) => v).map(([l, v]) => <a key={l} href={v} target="_blank" rel="noreferrer noopener">{l.toUpperCase()} </a>)}</td>
+                <td data-label="Foto">{s.draft?.selectedPhotoId ? <span className="badge ok">valitud</span> : s.photos.length ? <span className="badge warn">valimata</span> : <span className="badge">puudub</span>}</td>
+                <td data-label="Arsti ülevaatus">{s.lastDoctorReviewAt ? s.lastDoctorReviewAt.toLocaleDateString("et-EE") : "Kinnitamise aeg teadmata"}{due === "due" && <> <span className="badge warn">tähtaeg möödas</span></>}</td>
+                <td data-label="Kutse">{s.invites[0] ? (s.invites[0].revokedAt ? "tühistatud" : s.invites[0].expiresAt < new Date() ? "aegunud" : s.invites[0].sentMarkedAt ? `saadetud ${s.invites[0].sentMarkedAt.toLocaleDateString("et-EE")}` : "loodud, saatmata") : "kutset pole"}</td>
+                <td data-label="Avaldamata muudatus">{pendingPublish ? <span className="badge warn">v{s.versions[0].number} ootab</span> : "—"}</td>
+                <td data-label="Vastutav">{s.responsible?.name ?? "—"}</td>
+                <td data-label="Avalik profiil">{Object.entries((s.publicUrls ?? {}) as Record<string, string>).filter(([, v]) => v).map(([l, v]) => <a key={l} href={v} target="_blank" rel="noreferrer noopener">{l.toUpperCase()} </a>)}</td>
               </tr>
             ))}
             {!shown.length && <tr><td colSpan={10} className="muted">Selles järjekorras pole kedagi.</td></tr>}
