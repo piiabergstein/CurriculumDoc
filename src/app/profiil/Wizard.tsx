@@ -155,7 +155,7 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
                     {children.length === 0 && o.kind === "ORIGINAL" && <p className="muted">Töödeldud versiooni veel pole.</p>}
                     {children.map((p, i) => {
                       const st = (p.settings ?? {}) as { clothing?: boolean; testMode?: boolean; pipeline?: string };
-                      const qn = (p.qualityNotes ?? {}) as { identity?: { checked: boolean; ok: boolean; reason: string }; edgeClipped?: boolean; fallback?: string };
+                      const qn = (p.qualityNotes ?? {}) as { identity?: { checked: boolean; ok: boolean; reason: string }; edgeClipped?: boolean; fallback?: string; backgroundNote?: string };
                       return (
                         <figure key={p.id} style={{ margin: "0 0 12px" }}>
                           <img className="photo" src={photoUrl(p.id)} alt={`Töödeldud versioon ${i + 1}`} />
@@ -166,6 +166,7 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
                           {qn.identity?.checked && !qn.identity.ok && <p className="notice err">AI kontroll: nägu võib originaalist erineda – {qn.identity.reason} Vali see foto ainult siis, kui oled ise tulemusega rahul.</p>}
                           {qn.edgeClipped && <p className="muted">Originaalis on õlad kaadri servast ära lõigatud, mistõttu jääb siia sirge serv. Stuudiotöötlus (AI) jätkab õlad loomulikult.</p>}
                           {qn.fallback && <p className="muted">{qn.fallback}</p>}
+                          {qn.backgroundNote && <p className="muted">{qn.backgroundNote}</p>}
                         </figure>
                       );
                     })}

@@ -8,7 +8,7 @@ import { enqueue, registerJob } from "./jobs";
 import { getTextAI, applyPolish, isTestMode } from "./ai";
 import { lengthProblems, ProfileContent, emptyProfile, mergeImport, contentHash, applyRegeneratedTranslation, patientDataSuspicion, diffFields, type FieldMeta, type Translations } from "./profile";
 import { buildApprovalSnapshot, managerEditNeedsApproval, ApprovalError, type ApprovalRequest } from "./versioning";
-import { checkQuality, checkFace, stripForStorage, removeBackground, changeClothing, studioPortrait, checkSamePerson, geminiConfigured, finish, PhotoStyle } from "./photo";
+import { checkQuality, checkFace, stripForStorage, removeBackground, changeClothing, studioPortrait, checkSamePerson, geminiConfigured, finish, canvasSize, PhotoStyle } from "./photo";
 import { inviteCodeHash, sixDigitCode } from "./security";
 import { INVITE_TTL_DAYS } from "./auth";
 
@@ -299,9 +299,18 @@ registerJob("photo", async (job, stage) => {
     img = await changeClothing(img, style);
   }
   await stage("Tausta eemaldamine");
-  const cut = await removeBackground(img);
-  await stage("Stuudiotaust ja kadreering");
-  const out = await finish(cut, style);
+  let out: { data: Buffer; edgeClipped: boolean };
+  try {
+    const cut = await removeBackground(img);
+    await stage("Stuudiotaust ja kadreering");
+    out = await finish(cut, style);
+  } catch (e) {
+    // AI stuudioportreel on juba hall taust: tausta eemalduse vea korral kasuta seda, ainult mõõdud ühtlustatakse
+    if (pipeline !== "studio_ai") throw e;
+    notes.backgroundNote = `Tausta ei ühtlustatud (${e instanceof Error ? e.message.slice(0, 120) : "viga"}) – kasutati AI portree enda tausta.`;
+    const { W, H } = canvasSize(style);
+    out = { data: await (await import("sharp")).default(img).rotate().resize(W, H, { fit: "cover", position: "top" }).jpeg({ quality: 90, mozjpeg: true }).toBuffer(), edgeClipped: false };
+  }
   if (pipeline === "studio_ai" || clothing) {
     await stage("Isikusarnasuse kontroll");
     notes.identity = await checkSamePerson(original, out.data).catch(() => ({ checked: false, ok: true, reason: "Isikusarnasuse kontroll ebaõnnestus." }));
