@@ -2,7 +2,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ProfileForm from "../../components/ProfileForm";
 import ProfilePreview from "../../components/ProfilePreview";
-import { APPROVAL_STATEMENT, FIELD_LABELS, type ProfileContent } from "../../lib/profile";
+import { APPROVAL_STATEMENT, FIELD_LABELS, contentHash, type ProfileContent } from "../../lib/profile";
+
+/** Väljatee (nt "education[0].degree") inimloetavaks nimeks. */
+const fieldLabel = (f: string) => FIELD_LABELS[f.split(/[.[]/)[0]] ?? f;
+/** Tõlke olek arvutatakse arsti praeguse (ka salvestamata) sisu järgi, mitte serveri viimase seisu järgi. */
+function trStatus(t: { sourceHash: string } | null | undefined, et: ProfileContent): "missing" | "fresh" | "stale" {
+  if (!t) return "missing";
+  return t.sourceHash === contentHash(et) ? "fresh" : "stale";
+}
 import * as A from "./actions";
 import type { DoctorState } from "./actions";
 
@@ -92,7 +100,7 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
         <div className="card">
           <p>Tere! Siin saad koostada või uuendada oma profiili Meliva kodulehe jaoks. Võid igal ajal katkestada – kõik salvestub automaatselt ja saad sama koodiga hiljem jätkata.</p>
           <ul>
-            <li>Andmeid kasutatakse ainult Sinu avaliku profiili jaoks. Turunduse kontaktandmeid ei avaldata.</li>
+            <li>Andmeid kasutatakse ainult Sinu avaliku profiili jaoks. Sinu e-posti aadressi ei avaldata.</li>
             <li>Teksti korrastab ja tõlgib AI ainult Sinu esitatud faktide põhjal. Kõik muudatused on nähtavad.</li>
             <li>Midagi ei avaldata enne, kui oled sisu ja foto kinnitanud ning turundus selle käsitsi veebi lisab.</li>
             <li>Palun ära lisa patsientide andmeid.</li>
@@ -283,9 +291,9 @@ function AiResult({ r, tags, onAddTag }: { r: Record<string, unknown> | null; ta
       <p className="muted">Teenus: {x.model}{x.timings ? ` · korrastamine ${(x.timings.polishMs / 1000).toFixed(1)} s, tõlkimine ${(x.timings.translateMs / 1000).toFixed(1)} s` : ""}</p>
       {!!x.guardIssues?.length && <div className="notice warn"><strong>AI pakkus fakte, mida sisendis polnud – need jäeti kõrvale:</strong><ul>{x.guardIssues.map((g) => <li key={g}>{g}</li>)}</ul></div>}
       {x.introSkippedReason && <p className="notice warn">Tutvustust ei koostatud: {x.introSkippedReason}</p>}
-      {!!x.questions?.length && <><h3>Palun täpsusta</h3><ul>{x.questions.map((q, i) => <li key={i}><strong>{FIELD_LABELS[q.field] ?? q.field}:</strong> {q.question}</li>)}</ul></>}
+      {!!x.questions?.length && <><h3>Palun täpsusta</h3><ul>{x.questions.map((q, i) => <li key={i}><strong>{fieldLabel(q.field)}:</strong> {q.question}</li>)}</ul></>}
       {!!x.contradictions?.length && <><h3>Tuvastatud vastuolud</h3><ul>{x.contradictions.map((c) => <li key={c}>{c}</li>)}</ul></>}
-      {!!x.changes?.length && <><h3>Tehtud muudatused</h3><ul>{x.changes.map((c, i) => <li key={i}>{FIELD_LABELS[c.field] ?? c.field}: {c.note}</li>)}</ul></>}
+      {!!x.changes?.length && <><h3>Tehtud muudatused</h3><ul>{x.changes.map((c, i) => <li key={i}>{fieldLabel(c.field)}: {c.note}</li>)}</ul></>}
       {!!x.tagSuggestions?.length && <><h3>Tag'ide ettepanekud</h3><p className="hint">Neid ei lisata automaatselt. Vali sobivad (kuni 5); saad neid sammus 3 muuta.</p><ul>{x.tagSuggestions.map((t) => <li key={t.tag}><strong>{t.tag}</strong> – alus: {t.basis} {tags.includes(t.tag) ? <span className="badge ok">lisatud</span> : <button type="button" className="small secondary" disabled={tags.length >= 5} onClick={() => onAddTag(t.tag)}>Lisa</button>}</li>)}</ul></>}
       {!!x.keptManual?.length && <p className="notice">Sinu käsitsi parandatud tõlkeid ({x.keptManual.join(", ")}) ei kirjutatud üle. Uus ettepanek on eelvaates eraldi nähtav.</p>}
     </div>
@@ -300,11 +308,11 @@ function Languages({ s, content, act }: { s: DoctorState; content: ProfileConten
   return (
     <div className="card">
       <div className="tabs" role="tablist">
-        {([["et", "Eesti"], ["en", "English"], ["ru", "Русский"], ["compare", "Kõrvuti"]] as const).map(([k, l]) => <button key={k} role="tab" type="button" aria-selected={tab === k} onClick={() => { setTab(k); setEdit(null); }}>{l}{(k === "en" || k === "ru") && s.translations[k]?.status === "stale" ? " ⚠" : ""}</button>)}
+        {([["et", "Eesti"], ["en", "English"], ["ru", "Русский"], ["compare", "Kõrvuti"]] as const).map(([k, l]) => <button key={k} role="tab" type="button" aria-selected={tab === k} onClick={() => { setTab(k); setEdit(null); }}>{l}{(k === "en" || k === "ru") && trStatus(s.translations[k], content) === "stale" ? " ⚠ aegunud" : ""}</button>)}
       </div>
       {tab === "et" && <ProfilePreview content={content} lang="et" photoUrl={photo} />}
       {(tab === "en" || tab === "ru") && (!tr ? <p className="notice warn">Tõlge puudub – käivita AI-töötlus sammus 5.</p> : <>
-        {tr.status === "stale" && <p className="notice warn">Eestikeelset teksti on pärast tõlkimist muudetud – see tõlge on aegunud. Töötle uuesti sammus 5.</p>}
+        {trStatus(tr, content) === "stale" && <p className="notice warn">Eestikeelset teksti on pärast tõlkimist muudetud – see tõlge on aegunud. Töötle uuesti sammus 5.</p>}
         {(tab === "en" ? s.translations.enProposal : s.translations.ruProposal) && <p className="notice">Uus AI tõlkeettepanek on olemas, kuid Sinu käsitsi parandusi ei kirjutatud üle. <button type="button" className="small" onClick={() => act(A.acceptProposalAction(tab))}>Võta uus ettepanek kasutusele</button></p>}
         {tr.helpRequested && <p className="notice">Tõlke kontrollimiseks on palutud halduri abi. See ei tähenda, et tõlge on kinnitatud.</p>}
         {edit ? <div>
@@ -346,7 +354,7 @@ function Approve({ s, content, act, back, flush }: { s: DoctorState; content: Pr
       </div>
       {(["et", "en", "ru"] as const).map((l) => {
         const c = l === "et" ? content : s.translations[l]?.content;
-        const st = l === "et" ? "fresh" : s.translations[l]?.status ?? "missing";
+        const st = l === "et" ? "fresh" : trStatus(s.translations[l], content);
         return (
           <div className="card" key={l}>
             <h2>{{ et: "Eesti keel", en: "Inglise keel", ru: "Vene keel" }[l]}</h2>
