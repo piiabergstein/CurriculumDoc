@@ -90,8 +90,8 @@ export default async function StaffHome({ searchParams }: { searchParams: Promis
                   {obs(findings).length > 0 && <div className="hint">{obs(findings).map((f) => f.reason).join("; ")}</div>}
                 </td>
                 <td data-label="Foto">{s.draft?.selectedPhotoId ? <span className="badge ok">valitud</span> : s.photos.length ? <span className="badge warn">valimata</span> : <span className="badge">puudub</span>}</td>
-                <td data-label="Arsti ülevaatus">{s.lastDoctorReviewAt ? s.lastDoctorReviewAt.toLocaleDateString("et-EE") : "Kinnitamise aeg teadmata"}{due === "due" && <> <span className="badge warn">tähtaeg möödas</span></>}</td>
-                <td data-label="Kutse">{s.invites[0] ? (s.invites[0].revokedAt ? "tühistatud" : s.invites[0].expiresAt < new Date() ? "aegunud" : s.invites[0].sentMarkedAt ? `saadetud ${s.invites[0].sentMarkedAt.toLocaleDateString("et-EE")}` : "loodud, saatmata") : "kutset pole"}</td>
+                <td data-label="Arsti ülevaatus">{s.lastDoctorReviewAt ? s.lastDoctorReviewAt.toLocaleDateString("et-EE", { timeZone: "Europe/Tallinn" }) : "Kinnitamise aeg teadmata"}{due === "due" && <> <span className="badge warn">tähtaeg möödas</span></>}</td>
+                <td data-label="Kutse">{s.invites[0] ? (s.invites[0].revokedAt ? "tühistatud" : s.invites[0].expiresAt < new Date() ? "aegunud" : s.invites[0].sentMarkedAt ? `saadetud ${s.invites[0].sentMarkedAt.toLocaleDateString("et-EE", { timeZone: "Europe/Tallinn" })}` : "loodud, saatmata") : "kutset pole"}</td>
                 <td data-label="Avaldamata muudatus">{pendingPublish ? <span className="badge warn">v{s.versions[0].number} ootab</span> : "—"}</td>
                 <td data-label="Vastutav">{s.responsible?.name ?? "—"}</td>
                 <td data-label="Avalik profiil">{Object.entries((s.publicUrls ?? {}) as Record<string, string>).filter(([, v]) => v).map(([l, v]) => <a key={l} href={v} target="_blank" rel="noreferrer noopener">{l.toUpperCase()} </a>)}</td>

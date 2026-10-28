@@ -6,15 +6,50 @@ import { toPlainText, toCleanHtml, publicSections, diffFields, FIELD_LABELS, typ
 import * as A from "../../actions";
 
 const LANG_NAME: Record<Lang, string> = { et: "eesti", en: "inglise", ru: "vene" };
-const fmt = (s: string) => new Date(s).toLocaleString("et-EE");
+const fmt = (s: string) => new Date(s).toLocaleString("et-EE", { timeZone: "Europe/Tallinn" });
 
+/** Kopeerimine: lõikelaua API → execCommand varulahendus → käsitsi kopeerimise aken. */
 async function copy(text: string, setMsg: (s: string) => void, label: string) {
   try {
     await navigator.clipboard.writeText(text);
     setMsg(`Kopeeritud: ${label}`);
-  } catch {
-    setMsg("Kopeerimine ebaõnnestus – vali tekst käsitsi.");
-  }
+    return;
+  } catch {}
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch {}
+  ta.remove();
+  if (ok) { setMsg(`Kopeeritud: ${label}`); return; }
+  showManualCopy(text, label);
+  setMsg("Brauser ei lubanud automaatset kopeerimist – tekst avati eraldi aknas, vajuta Ctrl+C.");
+}
+
+function showManualCopy(text: string, label: string) {
+  document.getElementById("manual-copy")?.remove();
+  const box = document.createElement("div");
+  box.id = "manual-copy";
+  box.setAttribute("role", "dialog");
+  box.setAttribute("aria-label", `Kopeeri: ${label}`);
+  box.style.cssText = "position:fixed;inset:10% 5% auto 5%;z-index:50;background:#fff;border:2px solid var(--accent);border-radius:12px;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.25);max-width:800px;margin:0 auto";
+  const h = document.createElement("p");
+  h.textContent = `${label} – tekst on valitud, vajuta Ctrl+C (Macis Cmd+C).`;
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.readOnly = true;
+  ta.style.cssText = "width:100%;min-height:240px";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "Sulge";
+  close.onclick = () => box.remove();
+  box.append(h, ta, close);
+  document.body.appendChild(box);
+  ta.focus();
+  ta.select();
 }
 
 type Invite = { id: string; createdAt: string; expiresAt: string; revokedAt: string | null; sentMarkedAt: string | null; lastUsedAt: string | null; lockedAt: string | null; purpose: string };

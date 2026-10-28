@@ -107,7 +107,7 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
           </ul>
           {s.latestVersion && (
             <div className="notice">
-              <p>Sinu viimane kinnitatud profiil (versioon {s.latestVersion.number}, {new Date(s.latestVersion.createdAt).toLocaleDateString("et-EE")}). Kui info on endiselt õige, saad seda kinnitada ilma muudatusteta.</p>
+              <p>Sinu viimane kinnitatud profiil (versioon {s.latestVersion.number}, {new Date(s.latestVersion.createdAt).toLocaleDateString("et-EE", { timeZone: "Europe/Tallinn" })}). Kui info on endiselt õige, saad seda kinnitada ilma muudatusteta.</p>
               <button type="button" className="secondary" onClick={() => act(A.stillValidAction(), "Aitäh! Kinnitasid, et info on endiselt õige.")}>Info on endiselt õige</button>
             </div>
           )}

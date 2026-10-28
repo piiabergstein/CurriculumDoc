@@ -56,7 +56,7 @@ Meliva turundusmeeskond ${intro}
 2. Sisesta oma e-post: ${email}
 3. Sisesta kood: ${code}
 
-Kood kehtib kuni ${expires.toLocaleDateString("et-EE")}. Saad täitmise katkestada ja hiljem samal viisil jätkata.
+Kood kehtib kuni ${expires.toLocaleDateString("et-EE", { timeZone: "Europe/Tallinn" })}. Saad täitmise katkestada ja hiljem samal viisil jätkata.
 Palun ära jaga koodi teistega.
 
 Tervitades

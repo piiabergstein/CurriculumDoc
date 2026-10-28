@@ -11,7 +11,15 @@ import { InvitePanel, PublishDesk, ProPhotoUpload, DraftEditor } from "./client"
 export const dynamic = "force-dynamic";
 
 const TASK_LABELS: Record<string, string> = { INVITE: "Kutse saatmine", REVIEW_REMINDER: "Ülevaatuse meeldetuletus", TRANSLATION_HELP: "Tõlke kontrollimise abi", PHOTO_HELP: "Fotoabi", PATIENT_DATA: "Võimalikud patsiendiandmed – vaata üle ja eemalda" };
-const fmt = (d: Date | null | undefined) => (d ? d.toLocaleString("et-EE") : "—");
+const ACTION_LABELS: Record<string, string> = {
+  specialist_created: "lõi spetsialisti", specialist_updated: "muutis andmeid", invite_created: "lõi kutsekoodi", invite_marked_sent: "märkis kutse saadetuks", invites_revoked: "tühistas koodid",
+  doctor_login: "logis sisse", cv_uploaded: "laadis üles CV", ai_processed: "AI töötles teksti ja tõlked", translation_edited: "parandas tõlget", translation_proposal_accepted: "võttis kasutusele uue tõlke",
+  translation_help_requested: "palus tõlkeabi", photo_uploaded: "laadis üles foto", professional_photo_added: "lisas professionaalse foto", photo_help_requested: "palus fotoabi",
+  doctor_approved: "kinnitas profiili", still_valid_confirmed: "kinnitas, et info on endiselt õige", returned_to_doctor: "tagastas arstile", marked_ready: "märkis valmis avaldamiseks",
+  marked_published: "märkis veebis avaldatuks", manager_substantive_edit: "tegi sisulise muudatuse (vajab arsti kinnitust)", manager_formatting_edit: "tegi vormistusparanduse",
+  manager_draft_edit_needs_approval: "muutis mustandit (vajab arsti kinnitust)", task_done: "lahendas ülesande",
+};
+const fmt = (d: Date | null | undefined) => (d ? d.toLocaleString("et-EE", { timeZone: "Europe/Tallinn" }) : "—");
 
 export default async function SpecialistDetail({ params }: { params: Promise<{ id: string }> }) {
   const u = await requireStaff();
@@ -134,7 +142,7 @@ export default async function SpecialistDetail({ params }: { params: Promise<{ i
         </div>
         <div className="card">
           <h2 style={{ marginTop: 0 }}>Tegevuste ajalugu</h2>
-          <ul style={{ maxHeight: 320, overflow: "auto" }}>{s.activities.map((a) => <li key={a.id}><span className="muted">{fmt(a.createdAt)}</span> {a.actor}: {a.action}</li>)}</ul>
+          <ul style={{ maxHeight: 320, overflow: "auto" }}>{s.activities.map((a) => <li key={a.id}><span className="muted">{fmt(a.createdAt)}</span> {a.actor}: {ACTION_LABELS[a.action] ?? a.action}</li>)}</ul>
           <h3>Taustatööd</h3>
           <ul>{s.jobs.map((j) => <li key={j.id}>{j.type}: {j.status}{j.stage ? ` (${j.stage})` : ""}{j.durationMs ? ` · ${(j.durationMs / 1000).toFixed(1)} s` : ""}{j.error ? <span className="badge err">{j.error}</span> : null}</li>)}</ul>
         </div>
