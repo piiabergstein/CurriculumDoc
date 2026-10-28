@@ -101,8 +101,9 @@ async function callTool<T>(client: Anthropic, schema: z.ZodType<T, z.ZodTypeDef,
       max_tokens: 8000,
       system: SYSTEM,
       tools: [{ name: toolName, description: "Tagasta tulemus", input_schema: inputSchema as Anthropic.Tool.InputSchema }],
-      tool_choice: { type: "tool", name: toolName },
-      messages: [{ role: "user", content }],
+      // Osa mudeleid ei toeta sunnitud tööriista (tool_choice "tool"/"any") – kasuta "auto" ja nõua kutset juhisega.
+      tool_choice: { type: "auto" },
+      messages: [{ role: "user", content: [...(typeof content === "string" ? [{ type: "text" as const, text: content }] : content), { type: "text" as const, text: `Vasta AINULT tööriista ${toolName} kutsega, ilma muu tekstita.` }] }],
     });
     const block = res.content.find((b) => b.type === "tool_use");
     const parsed = schema.safeParse(block && "input" in block ? block.input : null);
