@@ -5,10 +5,10 @@ import { PDFParse } from "pdf-parse";
 import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { enqueue, registerJob } from "./jobs";
-import { getTextAI, applyPolish } from "./ai";
+import { getTextAI, applyPolish, isTestMode } from "./ai";
 import { lengthProblems, ProfileContent, emptyProfile, mergeImport, contentHash, applyRegeneratedTranslation, patientDataSuspicion, diffFields, type FieldMeta, type Translations } from "./profile";
 import { buildApprovalSnapshot, managerEditNeedsApproval, ApprovalError, type ApprovalRequest } from "./versioning";
-import { checkQuality, checkFace, stripForStorage, removeBackground, changeClothing, finish, PhotoStyle } from "./photo";
+import { checkQuality, checkFace, stripForStorage, removeBackground, changeClothing, studioPortrait, checkSamePerson, geminiConfigured, finish, PhotoStyle } from "./photo";
 import { inviteCodeHash, sixDigitCode } from "./security";
 import { INVITE_TTL_DAYS } from "./auth";
 
@@ -25,7 +25,10 @@ export async function getSetting<T>(key: string, fallback: T): Promise<T> {
 }
 export async function photoStyleFor(group: string): Promise<PhotoStyle> {
   const styles = await getSetting<Record<string, unknown>>("photoStyles", {});
-  return PhotoStyle.parse(styles[group] ?? styles.default ?? {});
+  const raw = { ...((styles[group] ?? styles.default ?? {}) as Record<string, unknown>) };
+  // enne stuudiostiili salvestatud seaded: taust ja kadreering tulevad uutest vaikeväärtustest
+  if (!("mode" in raw)) for (const k of ["background", "aspect", "width", "headroom", "brightness", "saturation", "referenceNote"]) delete raw[k];
+  return PhotoStyle.parse(raw);
 }
 
 // ---------------- spetsialist ja kutse ----------------
@@ -252,32 +255,50 @@ export async function uploadOriginalPhoto(specialistId: string, buf: Buffer, act
   return { ok: true as const, id: p.id, faceNote: face.reason };
 }
 
-export async function requestPhotoProcessing(specialistId: string, originalId: string, clothing: boolean) {
+export type PhotoOptions = { clothing?: boolean; plain?: boolean };
+
+export async function requestPhotoProcessing(specialistId: string, originalId: string, opts: PhotoOptions = {}) {
   const sp = await db.specialist.findUniqueOrThrow({ where: { id: specialistId } });
   const style = await photoStyleFor(sp.group);
   const count = await db.photoVersion.count({ where: { specialistId, parentId: originalId, kind: "PROCESSED" } });
   if (count >= style.maxRegenerations) throw new Error(`Uuesti genereerimise piir (${style.maxRegenerations}) on täis. Palu abi haldurilt.`);
-  return enqueue("photo", { specialistId, originalId, clothing, n: count + 1 }, { specialistId, dedupeKey: `photo:${originalId}:${count + 1}:${clothing}` });
+  const clothing = Boolean(opts.clothing), plain = Boolean(opts.plain);
+  return enqueue("photo", { specialistId, originalId, clothing, plain, n: count + 1 }, { specialistId, dedupeKey: `photo:${originalId}:${count + 1}:${clothing}:${plain}` });
 }
 
 registerJob("photo", async (job, stage) => {
-  const { specialistId, originalId, clothing } = job.payload as { specialistId: string; originalId: string; clothing: boolean };
+  const { specialistId, originalId, clothing, plain } = job.payload as { specialistId: string; originalId: string; clothing: boolean; plain?: boolean };
   const orig = await db.photoVersion.findUniqueOrThrow({ where: { id: originalId } });
   if (orig.specialistId !== specialistId) throw new Error("Vale omanik");
   const sp = await db.specialist.findUniqueOrThrow({ where: { id: specialistId } });
   const style = await photoStyleFor(sp.group);
-  let img: Buffer = Buffer.from(orig.data);
-  if (clothing) {
+  const original: Buffer = Buffer.from(orig.data);
+  let img = original;
+  const notes: Record<string, unknown> = {};
+  let pipeline: "studio_ai" | "deterministic" = !plain && style.mode === "studio_ai" ? "studio_ai" : "deterministic";
+  if (pipeline === "studio_ai" && !geminiConfigured() && !isTestMode()) {
+    pipeline = "deterministic";
+    notes.fallback = "AI stuudiotöötlus pole seadistatud (GEMINI_API_KEY) – kasutati lihttöötlust.";
+  }
+  if (pipeline === "studio_ai") {
+    await stage(clothing ? "Stuudioportree ja tööriietus (generatiivne AI)" : "Stuudioportree koostamine (generatiivne AI)");
+    img = await studioPortrait(img, style, clothing);
+  } else if (clothing) {
     await stage("Tööriietuse muutmine (generatiivne AI)");
     img = await changeClothing(img, style);
   }
   await stage("Tausta eemaldamine");
   const cut = await removeBackground(img);
-  await stage("Valgus, toon ja kadreering");
+  await stage("Stuudiotaust ja kadreering");
   const out = await finish(cut, style);
-  const meta = await (await import("sharp")).default(out).metadata();
+  if (pipeline === "studio_ai" || clothing) {
+    await stage("Isikusarnasuse kontroll");
+    notes.identity = await checkSamePerson(original, out.data).catch(() => ({ checked: false, ok: true, reason: "Isikusarnasuse kontroll ebaõnnestus." }));
+  }
+  if (out.edgeClipped && pipeline === "deterministic") notes.edgeClipped = true;
+  const meta = await (await import("sharp")).default(out.data).metadata();
   const testMode = !process.env.REPLICATE_API_TOKEN;
-  const p = await db.photoVersion.create({ data: { specialistId, kind: "PROCESSED", parentId: originalId, data: new Uint8Array(out), mimeType: "image/jpeg", width: meta.width ?? 0, height: meta.height ?? 0, settings: J({ style, clothing, testMode }), createdBy: "süsteem" } });
+  const p = await db.photoVersion.create({ data: { specialistId, kind: "PROCESSED", parentId: originalId, data: new Uint8Array(out.data), mimeType: "image/jpeg", width: meta.width ?? 0, height: meta.height ?? 0, settings: J({ style, clothing, pipeline, testMode }), qualityNotes: J(notes), createdBy: "süsteem" } });
   return { photoId: p.id };
 });
 

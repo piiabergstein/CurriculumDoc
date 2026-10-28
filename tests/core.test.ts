@@ -229,3 +229,33 @@ describe("sisendi piirangud ja tekstid", async () => {
     expect(reasons.join(" ")).not.toMatch(/keeled puudub/);
   });
 });
+
+describe("fotostiil: stuudiokadreering", async () => {
+  const sharp = (await import("sharp")).default;
+  const { finish, PhotoStyle } = await import("../src/lib/photo");
+  // sünteetiline väljalõige: läbipaistval taustal "pea" ja "õlad", mis ulatuvad vasakust servast välja
+  const cutout = async (clipLeft: boolean) => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><circle cx="300" cy="200" r="90" fill="#402010"/><rect x="${clipLeft ? 0 : 120}" y="330" width="${clipLeft ? 480 : 360}" height="270" fill="#111"/></svg>`;
+    return sharp(Buffer.from(svg)).png().toBuffer();
+  };
+  it("vaikestiil on 3:2 horisontaalne, pea keskel ja ülaservas ruumi", async () => {
+    const style = PhotoStyle.parse({});
+    const out = await finish(await cutout(false), style);
+    const m = await sharp(out.data).metadata();
+    expect([m.width, m.height]).toEqual([1536, 1024]);
+    expect(m.exif).toBeUndefined();
+    const { data, info } = await sharp(out.data).greyscale().raw().toBuffer({ resolveWithObject: true });
+    const row = (y: number) => Array.from(data.subarray(y * info.width, (y + 1) * info.width));
+    // ülemine rida on taust (hele), pea ülaosa rida ~headroom kõrgusel sisaldab tumedamat pead keskel
+    expect(Math.min(...row(5))).toBeGreaterThan(130);
+    const headRow = row(Math.round(1024 * 0.15));
+    const dark = headRow.map((v, x) => (v < 140 ? x : -1)).filter((x) => x >= 0);
+    const cx = (dark[0] + dark[dark.length - 1]) / 2;
+    expect(Math.abs(cx - 768)).toBeLessThan(40);
+    expect(out.edgeClipped).toBe(false);
+  });
+  it("märgib külgedelt äralõigatud originaali", async () => {
+    const out = await finish(await cutout(true), PhotoStyle.parse({}));
+    expect(out.edgeClipped).toBe(true);
+  });
+});

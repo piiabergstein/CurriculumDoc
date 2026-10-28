@@ -1,20 +1,24 @@
-// Fototöötlus: vaikimisi deterministlik (tausta eemaldus + sharp), generatiivne ainult tööriietuse muutmisel.
-import sharp, { type Metadata } from "sharp";
+// Fototöötlus: vaikimisi stuudioportree (Gemini kadreerib ja jätkab õlad) → tausta eemaldus → ühtne gradienttaust (sharp).
+// Režiim "deterministic" jätab generatiivse sammu vahele (ainult tausta eemaldus + sharp).
+import sharp, { type Metadata, type OverlayOptions } from "sharp";
 import { z } from "zod";
 import { isTestMode, ServiceNotConfigured, extractJson } from "./ai";
 
 export const PhotoStyle = z.object({
   name: z.string().default("Vaikimisi"),
-  background: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#D9DDE0"),
-  brightness: z.number().min(0.7).max(1.3).default(1.03),
-  saturation: z.number().min(0.5).max(1.5).default(0.95),
+  mode: z.enum(["studio_ai", "deterministic"]).default("studio_ai"),
+  background: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#C9CED5"), // gradiendi hele keskosa (pea taga)
+  backgroundEdge: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#959EA9"), // gradiendi tumedam serv
+  brightness: z.number().min(0.7).max(1.3).default(1.02),
+  saturation: z.number().min(0.5).max(1.5).default(0.97),
   warmth: z.number().min(-20).max(20).default(0), // + soojem
-  aspect: z.enum(["4:5", "1:1", "3:4", "2:3"]).default("1:1"),
-  width: z.number().int().min(300).max(3000).default(1200),
-  headroom: z.number().min(0).max(0.3).default(0.08),
+  aspect: z.enum(["3:2", "4:5", "1:1", "3:4", "2:3"]).default("3:2"),
+  width: z.number().int().min(300).max(3000).default(1536),
+  headroom: z.number().min(0).max(0.3).default(0.09), // pealae kaugus ülaservast (osa kõrgusest)
+  subjectWidth: z.number().min(0.3).max(1).default(0.62), // õlgade laius (osa kaadri laiusest)
   maxRegenerations: z.number().int().min(0).max(20).default(5),
   clothingPrompt: z.string().default("tumesinine meditsiiniline tööriietus (scrubs), ilma logode, stetoskoobi ja muude lisadeta"),
-  referenceNote: z.string().default("Vaikimisi väärtused põhinevad ühe referentsfoto (merili-prikk) vaatlusel 26.10.2026: ruudukujuline 600×600, hele külm hall ühtlane taust, pea ja õlad, pehme ühtlane valgus. See on tähelepanek, mitte ametlik Meliva brändireegel."),
+  referenceNote: z.string().default("Vaikimisi väärtused põhinevad Meliva näidispaaril (sisend → väljund) 28.10.2026: horisontaalne 3:2 kaader, inimene keskel eestvaates, pea, õlad ja rindkere ülaosa, sile hall-sinakas stuudiogradient (heledam pea taga, servades tumedam), pehme ühtlane valgus, kerge retušš. See on tähelepanek, mitte ametlik Meliva brändireegel."),
 });
 export type PhotoStyle = z.infer<typeof PhotoStyle>;
 
@@ -62,25 +66,60 @@ export async function checkFace(buf: Buffer): Promise<{ checked: boolean; ok: bo
   return p.success ? { checked: true, ...p.data } : { checked: false, ok: true, reason: "Näo kontrolli tulemus oli loetamatu." };
 }
 
-const ASPECTS: Record<PhotoStyle["aspect"], number> = { "4:5": 4 / 5, "1:1": 1, "3:4": 3 / 4, "2:3": 2 / 3 };
+const ASPECTS: Record<PhotoStyle["aspect"], number> = { "3:2": 3 / 2, "4:5": 4 / 5, "1:1": 1, "3:4": 3 / 4, "2:3": 2 / 3 };
 
-/** Deterministlik viimistlus: taust, valgus, toon, kadreering, mõõdud. Metaandmed eemaldatakse (sharp ei kopeeri neid vaikimisi). */
-export async function finish(cutoutOrPhoto: Buffer, style: PhotoStyle): Promise<Buffer> {
-  const width = style.width, height = Math.round(width / ASPECTS[style.aspect]);
-  const img = sharp(cutoutOrPhoto).rotate();
-  const meta = await img.metadata();
-  let base = img.flatten({ background: style.background });
-  base = base.modulate({ brightness: style.brightness, saturation: style.saturation });
-  if (style.warmth) base = base.tint({ r: 255, g: 255 - Math.max(0, style.warmth) * 0.6, b: 255 - Math.max(0, style.warmth) * 1.5 });
-  // kadreering: säilita pea üleval (headroom) – lõika laiust/kõrgust nii, et ülemine osa jääb
-  const w0 = meta.width ?? width, h0 = meta.height ?? height;
-  const target = ASPECTS[style.aspect];
-  let cw = w0, ch = Math.round(w0 / target);
-  if (ch > h0) { ch = h0; cw = Math.round(h0 * target); }
-  const left = Math.round((w0 - cw) / 2);
-  // portree: kärbi peamiselt alt, ülevalt jäta ainult headroom'i osa liigsest kõrgusest
-  const top = Math.round((h0 - ch) * style.headroom);
-  return base.extract({ left, top, width: cw, height: ch }).resize(width, height).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
+export function canvasSize(style: PhotoStyle) {
+  return { W: style.width, H: Math.round(style.width / ASPECTS[style.aspect]) };
+}
+
+/** Sile radiaalne stuudiogradient: heledam pea taga, servades tumedam. */
+async function backdrop(W: number, H: number, style: PhotoStyle): Promise<Buffer> {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><defs><radialGradient id="g" cx="50%" cy="38%" r="72%"><stop offset="0" stop-color="${style.background}"/><stop offset="1" stop-color="${style.backgroundEdge}"/></radialGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
+/**
+ * Deterministlik viimistlus: väljalõigatud inimene (alfakanaliga) paigutatakse gradienttaustale –
+ * pea horisontaalselt keskele, pealagi `headroom` kaugusele ülaservast, kaader lõikab rindkere juurest.
+ * Metaandmed eemaldatakse (sharp ei kopeeri neid vaikimisi).
+ */
+export async function finish(cutout: Buffer, style: PhotoStyle): Promise<{ data: Buffer; edgeClipped: boolean }> {
+  const { W, H } = canvasSize(style);
+  const norm = await sharp(cutout).rotate().ensureAlpha().png().toBuffer();
+  const { data: alpha, info } = await sharp(norm).extractChannel(3).raw().toBuffer({ resolveWithObject: true });
+  const w = info.width, h = info.height;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (alpha[y * w + x] > 24) {
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  const layers: OverlayOptions[] = [];
+  let edgeClipped = false;
+  if (x1 >= 0) {
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    // pea keskpunkt: läbipaistmatute pikslite keskmine x ülemises 15%-s
+    let sx = 0, n = 0;
+    for (let y = y0; y < y0 + Math.max(1, Math.round(bh * 0.15)); y++) for (let x = x0; x <= x1; x++) if (alpha[y * w + x] > 24) { sx += x; n++; }
+    const headCx = (n ? sx / n : (x0 + x1) / 2) - x0;
+    const top = Math.round(H * style.headroom);
+    const s = Math.max((style.subjectWidth * W) / bw, (H - top) / bh);
+    const sw = Math.max(1, Math.round(bw * s)), sh = Math.max(1, Math.round(bh * s));
+    const left = Math.round(W / 2 - headCx * s);
+    const ix = Math.max(0, -left), iw = Math.min(sw - ix, W - Math.max(0, left)), ih = Math.min(sh, H - top);
+    // originaalis külgedelt äralõigatud inimene jätab kaadrisse kõva vertikaalse serva
+    edgeClipped = (x0 <= 1 && left > 0) || (x1 >= w - 2 && left + sw < W);
+    if (iw > 0 && ih > 0) {
+      const subject = await sharp(norm).extract({ left: x0, top: y0, width: bw, height: bh }).resize(sw, sh).png().toBuffer();
+      const visible = await sharp(subject).extract({ left: ix, top: 0, width: iw, height: ih }).png().toBuffer();
+      layers.push({ input: visible, left: Math.max(0, left), top });
+    }
+  }
+  const composed = await sharp(await backdrop(W, H, style)).composite(layers).png().toBuffer();
+  let img = sharp(composed).modulate({ brightness: style.brightness, saturation: style.saturation });
+  if (style.warmth) img = img.tint({ r: 255, g: 255 - Math.max(0, style.warmth) * 0.6, b: 255 - Math.max(0, style.warmth) * 1.5 });
+  return { data: await img.jpeg({ quality: 90, mozjpeg: true }).toBuffer(), edgeClipped };
 }
 
 async function fetchReplicateOutput(url: string): Promise<Buffer> {
@@ -129,27 +168,73 @@ export async function removeBackground(buf: Buffer): Promise<Buffer> {
   return fetchReplicateOutput(url);
 }
 
-/** Generatiivne tööriietuse muutus (Gemini). Kasutatakse ainult siis, kui see on selgelt valitud. */
-export async function changeClothing(buf: Buffer, style: PhotoStyle): Promise<Buffer> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
-    if (isTestMode()) return buf;
-    throw new ServiceNotConfigured("tööriietuse muutmine (GEMINI_API_KEY)");
-  }
+async function geminiEdit(buf: Buffer, prompt: string, aspect?: string): Promise<Buffer> {
   const model = process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
   const jpg = await sharp(buf).rotate().resize(1600, 1600, { fit: "inside" }).jpeg().toBuffer();
-  const prompt = `Edit this portrait photo: change ONLY the clothing to ${style.clothingPrompt}. Keep the person's face, facial features, skin, hair, expression, age, body shape and pose exactly unchanged and recognisable. Do not add a stethoscope, logos, name badges, text or any medical accessories. Keep a natural look.`;
+  const generationConfig = { responseModalities: ["IMAGE"], ...(aspect ? { imageConfig: { aspectRatio: aspect } } : {}) };
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
-    headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: jpg.toString("base64") } }] }] }),
+    headers: { "x-goog-api-key": process.env.GEMINI_API_KEY ?? "", "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: jpg.toString("base64") } }] }], generationConfig }),
   });
   const j = (await r.json()) as { candidates?: { content?: { parts?: { inlineData?: { data: string }; inline_data?: { data: string } }[] } }[]; error?: { message: string } };
-  if (!r.ok) throw new Error(`Tööriietuse muutmine ebaõnnestus: ${j.error?.message ?? r.status}`);
+  if (!r.ok) throw new Error(`Pilditeenuse viga: ${j.error?.message ?? r.status}`);
   const part = j.candidates?.[0]?.content?.parts?.find((p) => p.inlineData || p.inline_data);
   const data = part?.inlineData?.data ?? part?.inline_data?.data;
   if (!data) throw new Error("Pilditeenus ei tagastanud pilti");
   return Buffer.from(data, "base64");
+}
+
+const KEEP_IDENTITY = "Keep the person's face, facial features, eye colour, skin, hair, facial hair, expression, age and body shape exactly unchanged and clearly recognisable. Do not beautify, slim, smooth the skin or add makeup. Do not add a stethoscope, logos, name badges, text or any accessories.";
+
+export function geminiConfigured() {
+  return Boolean(process.env.GEMINI_API_KEY);
+}
+
+/** Generatiivne tööriietuse muutus (Gemini). Kasutatakse ainult siis, kui see on selgelt valitud. */
+export async function changeClothing(buf: Buffer, style: PhotoStyle): Promise<Buffer> {
+  if (!geminiConfigured()) {
+    if (isTestMode()) return buf;
+    throw new ServiceNotConfigured("tööriietuse muutmine (GEMINI_API_KEY)");
+  }
+  return geminiEdit(buf, `Edit this portrait photo: change ONLY the clothing to ${style.clothingPrompt}. ${KEEP_IDENTITY} Keep a natural look.`);
+}
+
+/**
+ * Stuudioportree (Gemini): sama inimene eestvaates keskele, pea-õlad-rindkere ülaosa, horisontaalne kaader;
+ * originaalis äralõigatud õlad ja käed jätkatakse loomulikult. Taust asendatakse hiljem deterministlikult.
+ */
+export async function studioPortrait(buf: Buffer, style: PhotoStyle, clothing: boolean): Promise<Buffer> {
+  if (!geminiConfigured()) {
+    if (isTestMode()) return buf;
+    throw new ServiceNotConfigured("stuudioportree (GEMINI_API_KEY)");
+  }
+  const clothes = clothing ? `Change ONLY the clothing to ${style.clothingPrompt}.` : "Keep the clothing exactly as it is (same garment, colour, collar and accessories such as a tie or bow tie).";
+  const prompt = `Turn this photo into a professional corporate studio portrait of the SAME person. ${KEEP_IDENTITY} ${clothes}
+Remove the original surroundings (walls, doors, panels, furniture) completely and place the person in front of a smooth seamless plain light grey studio backdrop with no texture or objects.
+Framing: ${style.aspect} landscape image, the person centred and facing the camera, head, shoulders and upper chest visible, top of the head about ${Math.round(style.headroom * 100)}% below the top edge, the frame ends at mid-chest. The shoulders take up roughly ${Math.round(style.subjectWidth * 100)}% of the image width. Where shoulders or arms are cut off or hidden in the original, extend them naturally and symmetrically.
+Lighting: soft, even, flattering studio light, natural skin tones, sharp focus on the eyes, only subtle retouching.`;
+  return geminiEdit(buf, prompt, style.aspect);
+}
+
+/** Isikusarnasuse kontroll (Claude vision): kas generatiivne tulemus kujutab sama inimest. */
+export async function checkSamePerson(original: Buffer, result: Buffer): Promise<{ checked: boolean; ok: boolean; reason: string }> {
+  if (!process.env.ANTHROPIC_API_KEY) return { checked: false, ok: true, reason: "Isikusarnasust ei kontrollitud (teenus seadistamata)." };
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const small = async (b: Buffer) => (await sharp(b).rotate().resize(800, 800, { fit: "inside" }).jpeg().toBuffer()).toString("base64");
+  const res = await client.messages.create({
+    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
+    max_tokens: 300,
+    messages: [{ role: "user", content: [
+      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: await small(original) } },
+      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: await small(result) } },
+      { type: "text", text: 'Esimene pilt on originaal, teine AI-ga töödeldud profiilifoto. Kas teisel pildil on selgelt sama inimene ning näojooned, juuksed, habe, silmad ja kehakuju pole märgatavalt muutunud? Taust, valgus ja kadreering võivad erineda. Vasta AINULT JSON-iga {"ok": true/false, "reason": "lühike selgitus eesti keeles"}.' },
+    ] }],
+  });
+  const text = res.content.map((x) => (x.type === "text" ? x.text : "")).join("");
+  const p = z.object({ ok: z.boolean(), reason: z.string() }).safeParse(extractJson(text));
+  return p.success ? { checked: true, ...p.data } : { checked: false, ok: true, reason: "Isikusarnasuse kontrolli tulemus oli loetamatu." };
 }
 
 export async function stripForStorage(buf: Buffer): Promise<{ data: Buffer; width: number; height: number }> {

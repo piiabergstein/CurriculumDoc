@@ -138,7 +138,7 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
       {step === 4 && (
         <div>
           <div className="card">
-            <p>Lae üles portreefoto, kus nägu on selgelt nähtav. Töötluse käigus ühtlustatakse taust, valgus ja kadreering. Näojooni ei muudeta.</p>
+            <p>Lae üles portreefoto, kus nägu on selgelt nähtav. Töötlus teeb sellest ühtses stiilis stuudioportree: hall taust, pehme valgus, horisontaalne kaader, Sina keskel. Generatiivne AI võib jätkata kaadrist välja jäänud õlgu – kontrolli, et tulemusel oleks Sinu nägu. Kui see ei sobi, vali „Lihttöötlus“, mis ainult eemaldab tausta.</p>
             <form onSubmit={async (e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const r = await A.uploadPhotoAction(fd); setMsg(r.ok ? { kind: "ok", text: `Foto laaditi üles, töötlus algas. ${r.note ?? ""}` } : { kind: "err", text: `${r.error} ${"problems" in r ? r.problems.join(" ") : ""}` }); refresh(); e.currentTarget.reset(); }}>
               <label htmlFor="photo">{originals.length ? "Asenda originaal" : "Vali foto"}</label>
               <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic" required />
@@ -153,19 +153,27 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
                   <figure><img className="photo" src={photoUrl(o.id)} alt="Originaalfoto" /><figcaption>{o.kind === "PROFESSIONAL" ? "Professionaalne foto (haldurilt)" : "Originaal"}</figcaption></figure>
                   <div>
                     {children.length === 0 && o.kind === "ORIGINAL" && <p className="muted">Töödeldud versiooni veel pole.</p>}
-                    {children.map((p, i) => (
-                      <figure key={p.id} style={{ margin: "0 0 12px" }}>
-                        <img className="photo" src={photoUrl(p.id)} alt={`Töödeldud versioon ${i + 1}`} />
-                        <figcaption className="row">
-                          Versioon {i + 1}{(p.settings as { clothing?: boolean })?.clothing ? " · tööriietus muudetud (AI)" : ""}{(p.settings as { testMode?: boolean })?.testMode ? " · TESTREŽIIM" : ""}
-                          {s.draft.selectedPhotoId === p.id ? <span className="badge ok">Valitud</span> : <button type="button" className="small" onClick={() => act(A.selectPhotoAction(p.id), "Foto valitud.")}>Vali see foto</button>}
-                        </figcaption>
-                      </figure>
-                    ))}
+                    {children.map((p, i) => {
+                      const st = (p.settings ?? {}) as { clothing?: boolean; testMode?: boolean; pipeline?: string };
+                      const qn = (p.qualityNotes ?? {}) as { identity?: { checked: boolean; ok: boolean; reason: string }; edgeClipped?: boolean; fallback?: string };
+                      return (
+                        <figure key={p.id} style={{ margin: "0 0 12px" }}>
+                          <img className="photo" src={photoUrl(p.id)} alt={`Töödeldud versioon ${i + 1}`} />
+                          <figcaption className="row">
+                            Versioon {i + 1}{st.pipeline === "studio_ai" ? " · stuudiotöötlus (AI)" : st.pipeline === "deterministic" ? " · lihttöötlus" : ""}{st.clothing ? " · tööriietus muudetud (AI)" : ""}{st.testMode ? " · TESTREŽIIM" : ""}
+                            {s.draft.selectedPhotoId === p.id ? <span className="badge ok">Valitud</span> : <button type="button" className="small" onClick={() => act(A.selectPhotoAction(p.id), "Foto valitud.")}>Vali see foto</button>}
+                          </figcaption>
+                          {qn.identity?.checked && !qn.identity.ok && <p className="notice err">AI kontroll: nägu võib originaalist erineda – {qn.identity.reason} Vali see foto ainult siis, kui oled ise tulemusega rahul.</p>}
+                          {qn.edgeClipped && <p className="muted">Originaalis on õlad kaadri servast ära lõigatud, mistõttu jääb siia sirge serv. Stuudiotöötlus (AI) jätkab õlad loomulikult.</p>}
+                          {qn.fallback && <p className="muted">{qn.fallback}</p>}
+                        </figure>
+                      );
+                    })}
                     {o.kind === "PROFESSIONAL" && (s.draft.selectedPhotoId === o.id ? <span className="badge ok">Valitud</span> : <button type="button" className="small" onClick={() => act(A.selectPhotoAction(o.id))}>Vali see foto</button>)}
                     {o.kind === "ORIGINAL" && <div className="row">
-                      <button type="button" className="secondary small" disabled={children.length >= s.maxRegenerations} onClick={() => act(A.processPhotoAction(o.id, false))}>Genereeri uuesti</button>
-                      <button type="button" className="secondary small" disabled={children.length >= s.maxRegenerations} onClick={() => confirm("Tööriietus muudetakse generatiivse AI abil. Näojooned peavad jääma samaks – kontrolli tulemust hoolikalt. Jätkan?") && act(A.processPhotoAction(o.id, true))}>Muuda tööriietus (AI)</button>
+                      <button type="button" className="secondary small" disabled={children.length >= s.maxRegenerations} onClick={() => act(A.processPhotoAction(o.id))}>Genereeri uuesti</button>
+                      <button type="button" className="secondary small" disabled={children.length >= s.maxRegenerations} onClick={() => act(A.processPhotoAction(o.id, { plain: true }))}>Lihttöötlus (ilma generatiivse AI-ta)</button>
+                      <button type="button" className="secondary small" disabled={children.length >= s.maxRegenerations} onClick={() => confirm("Tööriietus muudetakse generatiivse AI abil. Näojooned peavad jääma samaks – kontrolli tulemust hoolikalt. Jätkan?") && act(A.processPhotoAction(o.id, { clothing: true }))}>Muuda tööriietus (AI)</button>
                       <span className="muted">{children.length}/{s.maxRegenerations} genereerimist</span>
                     </div>}
                   </div>

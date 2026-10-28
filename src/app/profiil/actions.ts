@@ -91,16 +91,16 @@ export async function uploadPhotoAction(fd: FormData): Promise<R<{ note?: string
     if (!(f instanceof File) || !f.size) return { ok: false, error: "Vali foto.", problems: [] };
     const r = await svc.uploadOriginalPhoto(id, Buffer.from(await f.arrayBuffer()), "arst");
     if (!r.ok) return { ok: false, error: "Foto ei sobi töötluseks.", problems: r.problems };
-    await svc.requestPhotoProcessing(id, r.id, false);
+    await svc.requestPhotoProcessing(id, r.id);
     return { ok: true, note: r.faceNote };
   } catch (e) { return fail(e); }
 }
-export async function processPhotoAction(originalId: string, clothing: boolean): Promise<R> {
+export async function processPhotoAction(originalId: string, opts: svc.PhotoOptions = {}): Promise<R> {
   try {
     const id = await me();
     const p = await db.photoVersion.findUniqueOrThrow({ where: { id: originalId } });
     if (p.specialistId !== id) throw new Error("Ligipääs keelatud");
-    await svc.requestPhotoProcessing(id, originalId, clothing);
+    await svc.requestPhotoProcessing(id, originalId, { clothing: Boolean(opts.clothing), plain: Boolean(opts.plain) });
     return { ok: true };
   } catch (e) { return fail(e); }
 }

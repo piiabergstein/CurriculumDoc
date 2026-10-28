@@ -66,7 +66,7 @@ async function AdminSettings({ services }: { services: readonly (readonly [strin
         <p className="hint">required = kohustuslikud põhiväljad; observations = eraldi tähelepanekud (photo, experience, languages, age); requiredByGroup = rühmapõhised lisanõuded. Valikulised jaotised ei tekita kunagi hoiatust.</p>
         <textarea id="rules" name="rules" defaultValue={JSON.stringify(rules, null, 2)} style={{ fontFamily: "monospace", minHeight: 160 }} />
         <label htmlFor="styles">Fotostiilid rühmade kaupa (JSON)</label>
-        <p className="hint">Võtmed: background, brightness, saturation, warmth, aspect (4:5, 1:1, 3:4, 2:3), width, headroom, maxRegenerations, clothingPrompt, referenceNote. Need on seadistatavad väärtused, mitte ametlikud Meliva brändireeglid.</p>
+        <p className="hint">Võtmed: mode (studio_ai – AI stuudioportree, vajab GEMINI_API_KEY; deterministic – ainult tausta eemaldus), background (gradiendi keskosa), backgroundEdge (gradiendi serv), brightness, saturation, warmth, aspect (3:2, 4:5, 1:1, 3:4, 2:3), width, headroom, subjectWidth, maxRegenerations, clothingPrompt, referenceNote. Need on seadistatavad väärtused, mitte ametlikud Meliva brändireeglid.</p>
         <textarea id="styles" name="photoStyles" defaultValue={JSON.stringify(styles, null, 2)} style={{ fontFamily: "monospace", minHeight: 260 }} />
         <p><button>Salvesta seaded</button></p>
       </form>
