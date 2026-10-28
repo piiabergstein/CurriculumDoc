@@ -97,24 +97,36 @@ export async function removeBackground(buf: Buffer): Promise<Buffer> {
     if (isTestMode()) return buf; // testrežiim: tausta ei eemaldata
     throw new ServiceNotConfigured("tausta eemaldus (REPLICATE_API_TOKEN)");
   }
-  const model = process.env.REPLICATE_BG_MODEL || "851-labs/background-remover";
-  const jpg = await sharp(buf).rotate().resize(2000, 2000, { fit: "inside" }).jpeg().toBuffer();
-  const r = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Prefer: "wait=60" },
-    body: JSON.stringify({ input: { image: `data:image/jpeg;base64,${jpg.toString("base64")}` } }),
-  });
-  const j = (await r.json()) as { status?: string; output?: string | string[]; error?: string; urls?: { get: string } };
-  if (!r.ok || j.status === "failed") throw new Error(`Tausta eemaldus ebaõnnestus: ${j.error ?? r.status}`);
-  let out = j.output;
-  for (let i = 0; !out && j.urls?.get && i < 30; i++) {
-    await new Promise((res) => setTimeout(res, 2000));
-    const p = (await (await fetch(j.urls.get, { headers: { Authorization: `Bearer ${token}` } })).json()) as typeof j;
-    if (p.status === "failed") throw new Error(`Tausta eemaldus ebaõnnestus: ${p.error}`);
-    out = p.output;
+  // REPLICATE_BG_MODEL: "omanik/mudel" (kasutatakse viimast versiooni) või "omanik/mudel:versioon"
+  const [model, pinned] = (process.env.REPLICATE_BG_MODEL || "851-labs/background-remover").split(":");
+  const auth = { Authorization: `Bearer ${token}` };
+  let version = pinned;
+  if (!version) {
+    const m = await fetch(`https://api.replicate.com/v1/models/${model}`, { headers: auth });
+    const mj = (await m.json().catch(() => ({}))) as { latest_version?: { id: string }; detail?: string };
+    if (!m.ok || !mj.latest_version?.id) throw new Error(`Tausta eemalduse mudelit „${model}“ ei leitud (${m.status} ${mj.detail ?? ""})`.trim());
+    version = mj.latest_version.id;
   }
-  if (!out) throw new Error("Tausta eemaldus ei lõppenud õigeaegselt");
-  return fetchReplicateOutput(Array.isArray(out) ? out[0] : out);
+  const jpg = await sharp(buf).rotate().resize(2000, 2000, { fit: "inside" }).jpeg().toBuffer();
+  type Pred = { status?: string; output?: unknown; error?: string; detail?: string; urls?: { get: string } };
+  const r = await fetch("https://api.replicate.com/v1/predictions", {
+    method: "POST",
+    headers: { ...auth, "Content-Type": "application/json", Prefer: "wait=60" },
+    body: JSON.stringify({ version, input: { image: `data:image/jpeg;base64,${jpg.toString("base64")}` } }),
+  });
+  let p = (await r.json().catch(() => ({}))) as Pred;
+  if (!r.ok) throw new Error(`Tausta eemaldus ebaõnnestus (${r.status}): ${p.detail ?? p.error ?? "tundmatu viga"}`);
+  for (let i = 0; p.status !== "succeeded" && i < 45; i++) {
+    if (p.status === "failed" || p.status === "canceled") throw new Error(`Tausta eemaldus ebaõnnestus: ${p.error ?? p.status}`);
+    if (!p.urls?.get) break;
+    await new Promise((res) => setTimeout(res, 2000));
+    p = (await (await fetch(p.urls.get, { headers: auth })).json()) as Pred;
+  }
+  if (p.status !== "succeeded") throw new Error("Tausta eemaldus ei lõppenud õigeaegselt – proovi uuesti");
+  const out = p.output;
+  const url = typeof out === "string" ? out : Array.isArray(out) ? out[0] : (out as { url?: string } | null)?.url;
+  if (typeof url !== "string") throw new Error("Tausta eemaldus ei tagastanud pilti");
+  return fetchReplicateOutput(url);
 }
 
 /** Generatiivne tööriietuse muutus (Gemini). Kasutatakse ainult siis, kui see on selgelt valitud. */
