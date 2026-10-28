@@ -106,7 +106,7 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
             <li>Midagi ei avaldata enne, kui oled sisu ja foto kinnitanud ning turundus selle käsitsi veebi lisab.</li>
             <li>Palun ära lisa patsientide andmeid.</li>
           </ul>
-          {s.latestVersion && (
+          {s.latestVersion && s.specialist.workflowState !== "RETURNED" && (
             <div className="notice">
               <p>Sinu viimane kinnitatud profiil (versioon {s.latestVersion.number}, {new Date(s.latestVersion.createdAt).toLocaleDateString("et-EE", { timeZone: "Europe/Tallinn" })}). Kui info on endiselt õige, saad seda kinnitada ilma muudatusteta.</p>
               <button type="button" className="secondary" onClick={() => act(A.stillValidAction(), "Aitäh! Kinnitasid, et info on endiselt õige.")}>Info on endiselt õige</button>
