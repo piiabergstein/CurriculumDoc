@@ -225,7 +225,9 @@ function Nav({ back, next }: { back: () => void; next: () => void }) {
 }
 
 function Jobs({ jobs, onRetry }: { jobs: DoctorState["jobs"]; onRetry: (id: string) => void }) {
-  const shown = jobs.filter((j) => j.status !== "done" || Date.now() - new Date(j.createdAt).getTime() < 60_000).slice(0, 4);
+  // iga tööliigi kohta ainult viimane töö: hilisem katse asendab varasema vea
+  const latest = jobs.filter((j, i) => jobs.findIndex((k) => k.type === j.type) === i);
+  const shown = latest.filter((j) => j.status !== "done" || Date.now() - new Date(j.createdAt).getTime() < 60_000).slice(0, 4);
   if (!shown.length) return null;
   return (
     <div aria-live="polite">
