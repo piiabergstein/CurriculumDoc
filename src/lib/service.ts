@@ -282,7 +282,15 @@ registerJob("photo", async (job, stage) => {
   }
   if (pipeline === "studio_ai") {
     await stage(clothing ? "Stuudioportree ja tööriietus (generatiivne AI)" : "Stuudioportree koostamine (generatiivne AI)");
-    img = await studioPortrait(img, style, clothing);
+    try {
+      img = await studioPortrait(img, style, clothing);
+    } catch (e) {
+      // pilditeenuse viga (nt kvoot) ei tohi arsti takistada: tee lihttöötlus ja jäta märkus
+      if (clothing) throw e;
+      pipeline = "deterministic";
+      notes.fallback = `AI stuudiotöötlus ei õnnestunud (${e instanceof Error ? e.message.slice(0, 160) : "tundmatu viga"}) – kasutati lihttöötlust.`;
+      console.error(JSON.stringify({ level: "error", event: "studio_portrait_failed", specialistId, error: e instanceof Error ? e.message : String(e) }));
+    }
   } else if (clothing) {
     await stage("Tööriietuse muutmine (generatiivne AI)");
     img = await changeClothing(img, style);

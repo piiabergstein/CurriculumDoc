@@ -178,7 +178,8 @@ async function geminiEdit(buf: Buffer, prompt: string, aspect?: string): Promise
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: jpg.toString("base64") } }] }], generationConfig }),
   });
   const j = (await r.json()) as { candidates?: { content?: { parts?: { inlineData?: { data: string }; inline_data?: { data: string } }[] } }[]; error?: { message: string } };
-  if (!r.ok) throw new Error(`Pilditeenuse viga: ${j.error?.message ?? r.status}`);
+  if (r.status === 429) throw new Error("Pilditeenuse (Gemini) kvoot on täis – Google AI Studios tuleb lubada arveldus või oodata kvoodi taastumist.");
+  if (!r.ok) throw new Error(`Pilditeenuse viga (${r.status}): ${(j.error?.message ?? "").split(/\.\s/)[0].slice(0, 200)}`);
   const part = j.candidates?.[0]?.content?.parts?.find((p) => p.inlineData || p.inline_data);
   const data = part?.inlineData?.data ?? part?.inline_data?.data;
   if (!data) throw new Error("Pilditeenus ei tagastanud pilti");
