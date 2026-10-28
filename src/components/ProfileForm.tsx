@@ -1,8 +1,41 @@
 "use client";
+import { useState } from "react";
 import type { ProfileContent, SectionStatus } from "../lib/profile";
 import { validUrl } from "../lib/profile";
 
-type P = { value: ProfileContent; onChange: (v: ProfileContent) => void; provenance?: Record<string, { source: string; manual: boolean }>; errors?: Record<string, string> };
+type TagSuggestResult = { ok: true; suggestions: { tag: string; basis: string }[] } | { ok: false; error: string };
+type P = { value: ProfileContent; onChange: (v: ProfileContent) => void; provenance?: Record<string, { source: string; manual: boolean }>; errors?: Record<string, string>; onSuggestTags?: () => Promise<TagSuggestResult> };
+
+const MAX_TAGS = 5;
+
+/** AI pakub 3–4 tag'i olemasoleva info põhjal; arst lisab sobivad ükshaaval. */
+function TagSuggest({ v, onSuggest, add }: { v: ProfileContent; onSuggest: () => Promise<TagSuggestResult>; add: (t: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [list, setList] = useState<{ tag: string; basis: string }[] | null>(null);
+  const full = v.tags.filter(Boolean).length >= MAX_TAGS;
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button type="button" className="secondary small" disabled={busy} onClick={async () => {
+        setBusy(true); setErr("");
+        const r = await onSuggest();
+        setBusy(false);
+        if (r.ok) setList(r.suggestions); else setErr(r.error);
+      }}>{busy ? "AI mõtleb…" : list ? "Paku uued variandid" : "Täida olemasoleva info põhjal (AI)"}</button>
+      {err && <p className="notice err" role="alert">{err}</p>}
+      {list && (list.length === 0
+        ? <p className="muted">Olemasoleva info põhjal ei leitud uusi teemasid. Lisa tag'id käsitsi või täienda tutvustust.</p>
+        : <div aria-live="polite">
+            <p className="hint">AI ettepanekud – ühtegi ei lisata ilma Sinu kinnituseta. Kontrolli, et teema kirjeldab Sinu tööd õigesti.</p>
+            <ul>{list.map((s) => {
+              const added = v.tags.some((t) => t.trim().toLowerCase() === s.tag.toLowerCase());
+              return <li key={s.tag}><strong>{s.tag}</strong> <span className="muted">– alus: {s.basis}</span> {added ? <span className="badge ok">lisatud</span> : <button type="button" className="small" disabled={full} onClick={() => add(s.tag)}>Lisa</button>}</li>;
+            })}</ul>
+            {full && <p className="muted">Tag'e on juba {MAX_TAGS} – eemalda mõni, et uut lisada.</p>}
+          </div>)}
+    </div>
+  );
+}
 
 const SRC: Record<string, string> = { FORM: "vorm", FREETEXT: "vabatekst", CV_FILE: "CV-fail", AI: "AI", MANAGER: "haldur" };
 const LANGS = [["et", "eesti"], ["en", "inglise"], ["ru", "vene"], ["fi", "soome"], ["de", "saksa"], ["other", "muu"]] as const;
@@ -26,7 +59,7 @@ function SectionChoice({ field, v, set }: { field: string; v: ProfileContent; se
   );
 }
 
-export default function ProfileForm({ value: v, onChange, provenance, errors = {} }: P) {
+export default function ProfileForm({ value: v, onChange, provenance, errors = {}, onSuggestTags }: P) {
   const set = <K extends keyof ProfileContent>(k: K, val: ProfileContent[K]) => onChange({ ...v, [k]: val });
   const setSec = (f: string, s: SectionStatus | undefined) => {
     const sections = { ...v.sections };
@@ -142,7 +175,8 @@ export default function ProfileForm({ value: v, onChange, provenance, errors = {
         <p className="hint">Teemad, mille järgi patsient Sind leiab. Need ei ole ametlikud teenused ega kvalifikatsioonid.</p>
         <SectionChoice field="tags" v={v} set={(s) => setSec("tags", s)} />
         <label htmlFor="f-tags">Tag'id komaga eraldatult</label>
-        <input id="f-tags" value={v.tags.join(", ")} onChange={(e) => set("tags", e.target.value.split(",").map((x) => x.trimStart()).slice(0, 5))} />
+        <input id="f-tags" value={v.tags.join(", ")} onChange={(e) => set("tags", e.target.value.split(",").map((x) => x.trimStart()).slice(0, MAX_TAGS))} />
+        {onSuggestTags && <TagSuggest v={v} onSuggest={onSuggestTags} add={(t) => set("tags", [...v.tags.map((x) => x.trim()).filter(Boolean), t].slice(0, MAX_TAGS))} />}
       </fieldset>
 
       <fieldset className="card"><legend><h3>Teadustööd, artiklid, meediakommentaarid <span className="muted">(valikuline)</span></h3></legend>

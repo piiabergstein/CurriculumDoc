@@ -155,7 +155,12 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
           <ImportNotice />
           <Conflicts s={s} act={act} />
           <Imports s={s} act={act} />
-          <ProfileForm value={content} onChange={change} provenance={s.draft.fieldMeta} />
+          <ProfileForm value={content} onChange={change} provenance={s.draft.fieldMeta} onSuggestTags={async () => {
+            // AI näeb salvestatud mustandit: salvesta enne pooleli muudatused
+            if (!(await flush())) return { ok: false, error: "Salvesta muudatused enne ettepanekute küsimist." };
+            const r = await A.suggestTagsAction();
+            return r.ok ? { ok: true, suggestions: r.suggestions } : { ok: false, error: r.error };
+          }} />
           <Nav back={() => go(2)} next={() => go(4)} />
         </div>
       )}

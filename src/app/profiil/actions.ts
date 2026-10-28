@@ -130,6 +130,14 @@ export async function startProcessingAction(): Promise<R> {
     return { ok: true };
   } catch (e) { return fail(e); }
 }
+/** Tag'ide ettepanekud olemasoleva (salvestatud) profiili põhjal. Midagi ei lisata automaatselt. */
+export async function suggestTagsAction(): Promise<R<{ suggestions: { tag: string; basis: string }[] }>> {
+  try {
+    const id = await me();
+    if (!(await rateLimit(`ai:${id}`, 30, 3600))) return { ok: false, error: "Liiga palju töötlusi tunni jooksul. Proovi hiljem." };
+    return { ok: true, suggestions: await svc.suggestTags(id, "arst") };
+  } catch (e) { return fail(e); }
+}
 export async function retryJobAction(jobId: string): Promise<R> {
   const id = await me();
   const j = await db.job.findUniqueOrThrow({ where: { id: jobId } });

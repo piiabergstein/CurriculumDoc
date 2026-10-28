@@ -259,3 +259,16 @@ describe("fotostiil: stuudiokadreering", async () => {
     expect(out.edgeClipped).toBe(true);
   });
 });
+
+describe("tag'ide ettepanekud", async () => {
+  const { cleanTagSuggestions } = await import("../src/lib/ai");
+  it("eemaldab olemasolevad ja korduvad tag'id ning annab kuni 4", () => {
+    const list = ["Astma", "astma", "#laste allergiad", "perearstiabi", "töövõime hindamine", "nõustamine", "kroonilised haigused"].map((tag) => ({ tag, basis: "x" }));
+    const out = cleanTagSuggestions(list, ["Perearstiabi"]);
+    expect(out.map((s) => s.tag)).toEqual(["Astma", "laste allergiad", "töövõime hindamine", "nõustamine"]);
+  });
+  it("testadapter pakub ainult profiilis olevate faktide põhjal", async () => {
+    const out = await new MockAI().suggestTags({ ...base(), tags: [] });
+    expect(out).toEqual([{ tag: "[TEST] perearst", basis: "Ametinimetus: Perearst" }]);
+  });
+});

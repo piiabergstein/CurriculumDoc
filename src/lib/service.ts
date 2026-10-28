@@ -233,6 +233,14 @@ export async function acceptTranslationProposal(specialistId: string, lang: "en"
   await log(specialistId, actor, "translation_proposal_accepted", { lang });
 }
 
+export async function suggestTags(specialistId: string, actor: string) {
+  const d = await getDraft(specialistId);
+  const content = ProfileContent.parse(d.content);
+  const suggestions = await getTextAI().suggestTags(content);
+  await log(specialistId, actor, "tags_suggested", { count: suggestions.length });
+  return suggestions;
+}
+
 export async function requestTranslationHelp(specialistId: string, lang: "en" | "ru") {
   const d = await getDraft(specialistId);
   const tr = { ...(d.translations as Translations) };

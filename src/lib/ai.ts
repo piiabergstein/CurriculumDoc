@@ -51,6 +51,23 @@ export const PolishOutput = z.object({
   tagSuggestions: z.array(z.object({ tag: z.string(), basis: z.string() })).max(5).default([]),
   introSkippedReason: z.string().default(""),
 });
+export const TagSuggestOutput = z.object({ suggestions: z.array(z.object({ tag: z.string().min(1).max(60), basis: z.string() })).max(6).default([]) });
+export type TagSuggestion = z.infer<typeof TagSuggestOutput>["suggestions"][number];
+
+/** Eemaldab juba olemasolevad ja korduvad tag'id, piirab arvu 4-ga. */
+export function cleanTagSuggestions(list: TagSuggestion[], existing: string[]): TagSuggestion[] {
+  const seen = new Set(existing.map((t) => t.trim().toLowerCase()));
+  const out: TagSuggestion[] = [];
+  for (const s of list) {
+    const tag = s.tag.trim().replace(/^#/, "");
+    const k = tag.toLowerCase();
+    if (!tag || seen.has(k)) continue;
+    seen.add(k);
+    out.push({ tag, basis: s.basis.trim() });
+  }
+  return out.slice(0, 4);
+}
+
 export const TranslateOutput = z.object({ profile: ProfileContent.partial(), notes: z.array(z.string()).default([]) });
 
 export type ExtractOutput = z.infer<typeof ExtractOutput>;
@@ -92,6 +109,7 @@ export interface TextAI {
   extract(doc: DocInput): Promise<ExtractOutput>;
   polish(input: ProfileContent, wantsIntro: boolean): Promise<PolishOutput>;
   translate(et: ProfileContent, lang: Exclude<Lang, "et">, glossary: { et: string; en: string; ru: string }[]): Promise<ProfileContent>;
+  suggestTags(input: ProfileContent): Promise<TagSuggestion[]>;
 }
 
 /** Leiab mudeli vastusest esimese JSON-objekti (ka siis, kui see on koodiplokis). */
@@ -152,6 +170,17 @@ Paku kuni 5 tag'i ainult selgelt sisendis olevate teemade põhjal (mitte teenuse
     const tags = out.profile.tags?.length === et.tags.length ? out.profile.tags : et.tags; // tõlge ei tohi tag'e lisada ega eemaldada
     return ProfileContent.parse({ ...et, ...out.profile, tags, languages: et.languages, age: { ...et.age, note: out.profile.age?.note ?? et.age.note }, sections: et.sections });
   }
+  async suggestTags(input: ProfileContent) {
+    const text = `Paku 4 eestikeelset erialast tag'i (teemat), mille järgi patsient võiks selle spetsialisti leida. Reeglid:
+- AINULT allolevas profiilis selgelt olemas olevate faktide põhjal (ametinimetus, haridus, töökogemus, koolitused, tutvustus, teadustööd). Ära oleta huvisid ega teemasid, mida profiilis pole.
+- 1–3 sõna, väike algustäht (v.a nimed), patsiendile arusaadav, nt „perearstiabi“, „laste allergiad“, „töövõime hindamine“.
+- Mitte tiitlid, kraadid, asutuste nimed ega kvalifikatsiooni väited.
+- Ära korda juba olemasolevaid tag'e: ${JSON.stringify(input.tags)}.
+- Iga tag'i juurde lühike alus (basis): milline profiili fakt seda toetab.
+<input>${JSON.stringify({ ...input, tags: undefined, sections: undefined })}</input>`;
+    const out = await callTool(this.client, TagSuggestOutput, "tag_suggestions", { type: "object", properties: { suggestions: { type: "array", items: { type: "object", properties: { tag: { type: "string" }, basis: { type: "string" } }, required: ["tag", "basis"] } } }, required: ["suggestions"] }, [{ type: "text", text }]);
+    return cleanTagSuggestions(out.suggestions, input.tags);
+  }
 }
 
 /** Selgelt märgistatud testadapter – ainult APP_MODE=test. */
@@ -176,6 +205,11 @@ export class MockAI implements TextAI {
   }
   async translate(et: ProfileContent, lang: "en" | "ru") {
     return ProfileContent.parse({ ...et, description: `[TEST-${lang.toUpperCase()}] ${et.description}`, additionalInfo: et.additionalInfo ? `[TEST-${lang.toUpperCase()}] ${et.additionalInfo}` : "" });
+  }
+  async suggestTags(input: ProfileContent) {
+    const fromTitles = input.titles.map((t) => ({ tag: `[TEST] ${t.toLowerCase()}`, basis: `Ametinimetus: ${t}` }));
+    const fromTrainings = input.trainings.map((t) => ({ tag: `[TEST] ${t.title.toLowerCase()}`, basis: `Koolitus: ${t.title}` }));
+    return cleanTagSuggestions([...fromTitles, ...fromTrainings], input.tags);
   }
 }
 

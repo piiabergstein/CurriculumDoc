@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 const TASK_LABELS: Record<string, string> = { INVITE: "Kutse saatmine", REVIEW_REMINDER: "Ülevaatuse meeldetuletus", TRANSLATION_HELP: "Tõlke kontrollimise abi", PHOTO_HELP: "Fotoabi", PATIENT_DATA: "Võimalikud patsiendiandmed – vaata üle ja eemalda" };
 const ACTION_LABELS: Record<string, string> = {
   specialist_created: "lõi spetsialisti", specialist_updated: "muutis andmeid", invite_created: "lõi kutsekoodi", invite_marked_sent: "märkis kutse saadetuks", invites_revoked: "tühistas koodid",
-  doctor_login: "logis sisse", cv_uploaded: "laadis üles CV", ai_processed: "AI töötles teksti ja tõlked", translation_edited: "parandas tõlget", translation_proposal_accepted: "võttis kasutusele uue tõlke",
+  doctor_login: "logis sisse", cv_uploaded: "laadis üles CV", tags_suggested: "küsis AI-lt tag'ide ettepanekuid", ai_processed: "AI töötles teksti ja tõlked", translation_edited: "parandas tõlget", translation_proposal_accepted: "võttis kasutusele uue tõlke",
   translation_help_requested: "palus tõlkeabi", photo_uploaded: "laadis üles foto", professional_photo_added: "lisas professionaalse foto", photo_help_requested: "palus fotoabi",
   doctor_approved: "kinnitas profiili", still_valid_confirmed: "kinnitas, et info on endiselt õige", returned_to_doctor: "tagastas arstile", marked_ready: "märkis valmis avaldamiseks",
   marked_published: "märkis veebis avaldatuks", manager_substantive_edit: "tegi sisulise muudatuse (vajab arsti kinnitust)", manager_formatting_edit: "tegi vormistusparanduse",
