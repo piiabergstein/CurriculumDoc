@@ -79,6 +79,27 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
   };
 
   const lastJob = (type: string) => s.jobs.find((j) => j.type === type);
+  const lastImport = lastJob("import");
+  const importRunning = lastImport?.status === "queued" || lastImport?.status === "running";
+
+  // CV üleslaadimise järel oota 1. sammus lugemise lõpuni ja näita, mis täideti
+  const [waitImport, setWaitImport] = useState(false);
+  useEffect(() => {
+    if (!waitImport || !lastImport || importRunning) return;
+    setWaitImport(false);
+    if (lastImport.status !== "done") return;
+    const r = (lastImport.result ?? {}) as { filled?: string[]; conflicts?: number };
+    const filled = (r.filled ?? []).map(fieldLabel);
+    const missing = [!content.titles.length && "ametinimetus", !content.description.trim() && "tutvustus"].filter(Boolean);
+    const text = [
+      filled.length ? `CV on sisse loetud. Täideti: ${filled.join(", ")}.` : "CV on sisse loetud, aga uusi andmeid ei lisandunud (väljad olid juba täidetud või CV-s puudusid).",
+      r.conflicts ? `${r.conflicts} välja puhul erineb CV olemasolevast infost – vali allpool, kumba kasutada.` : "",
+      missing.length ? `CV-st ei leitud: ${missing.join(", ")} – lisa need 3. sammus.` : "",
+    ].filter(Boolean).join(" ");
+    go(2).then(() => setMsg({ kind: "ok", text }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitImport, lastImport?.id, lastImport?.status]);
+  const ImportNotice = () => importRunning ? <p className="notice warn" role="status">Loen CV-d… Väljad täituvad automaatselt, kui lugemine lõpeb (tavaliselt alla minuti). Oota palun enne muutmist.</p> : null;
   const originals = s.photos.filter((p) => p.kind === "ORIGINAL" || p.kind === "PROFESSIONAL");
   const processed = s.photos.filter((p) => p.kind === "PROCESSED");
 
@@ -112,13 +133,16 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
               <button type="button" className="secondary" onClick={() => act(A.stillValidAction(), "Aitäh! Kinnitasid, et info on endiselt õige.")}>Info on endiselt õige</button>
             </div>
           )}
-          <CvUpload act={act} onDone={() => go(2)} />
-          <p><button type="button" onClick={() => go(2)}>{s.jobs.some((j) => j.type === "import") ? "Edasi" : "Alusta ilma CV-ta"}</button></p>
+          {waitImport && importRunning
+            ? <p className="notice warn" role="status">Loen CV-d ({lastImport?.stage ?? "järjekorras"})… See võtab tavaliselt alla minuti. Liigume edasi automaatselt.</p>
+            : <CvUpload act={act} onDone={() => setWaitImport(true)} />}
+          <p><button type="button" className={waitImport ? "secondary" : undefined} onClick={() => { setWaitImport(false); go(2); }}>{waitImport ? "Ära oota, jätka" : s.jobs.some((j) => j.type === "import") ? "Edasi" : "Alusta ilma CV-ta"}</button></p>
         </div>
       )}
 
       {step === 2 && (
         <div>
+          <ImportNotice />
           <Conflicts s={s} act={act} />
           <div className="card"><p>Siin on seni olemas olev info. Vaata see üle – järgmises sammus saad täiendada või parandada üksikuid välju. Kogu CV-d ei pea uuesti sisestama.</p>
             <ProfilePreview content={content} lang="et" /></div>
@@ -128,6 +152,7 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
 
       {step === 3 && (
         <div>
+          <ImportNotice />
           <Conflicts s={s} act={act} />
           <Imports s={s} act={act} />
           <ProfileForm value={content} onChange={change} provenance={s.draft.fieldMeta} />

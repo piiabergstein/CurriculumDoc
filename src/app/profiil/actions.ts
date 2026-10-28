@@ -25,7 +25,7 @@ export async function loadState() {
     svc.getDraft(id),
     db.photoVersion.findMany({ where: { specialistId: id }, select: { id: true, kind: true, parentId: true, width: true, height: true, settings: true, qualityNotes: true, approvedAt: true, createdAt: true }, orderBy: { createdAt: "asc" } }),
     db.importConflict.findMany({ where: { specialistId: id, resolvedAt: null } }),
-    db.job.findMany({ where: { specialistId: id }, orderBy: { createdAt: "desc" }, take: 10, select: { id: true, type: true, status: true, stage: true, error: true, durationMs: true, createdAt: true, attempts: true } }),
+    db.job.findMany({ where: { specialistId: id }, orderBy: { createdAt: "desc" }, take: 10, select: { id: true, type: true, status: true, stage: true, error: true, durationMs: true, createdAt: true, attempts: true, result: true } }),
     db.profileVersion.findMany({ where: { specialistId: id }, orderBy: { number: "desc" }, take: 1, select: { id: true, number: true, createdAt: true } }),
   ]);
   const style = await svc.photoStyleFor(sp.group);
