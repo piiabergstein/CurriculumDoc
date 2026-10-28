@@ -26,3 +26,5 @@ table { width:100%; border-collapse:collapse; background:#fff } th,td { text-ali
 pre.copy { white-space:pre-wrap; background:#fafbfb; border:1px solid var(--line); padding:10px; border-radius:8px; font-size:.88rem; max-height:300px; overflow:auto }
 .diff-del { background:#fde2e2; text-decoration:line-through } .diff-add { background:#dff3e4 }
 nav.top { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:16px }
+.steplink { background:none; border:none; padding:0; color:inherit; font:inherit; font-weight:inherit; cursor:pointer }
+.steplink:focus-visible { outline:3px solid var(--focus); outline-offset:3px; border-radius:99px }

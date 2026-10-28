@@ -87,7 +87,7 @@ export default function ProfileForm({ value: v, onChange, provenance, errors = {
 
       <fieldset className="card"><legend><h3>Vastuvõtu kirjeldus <Origin f="description" p={provenance} /></h3></legend>
         <p className="hint" id="desc-hint">Kirjelda lühidalt oma erialaseid huvisid, tugevusi ja kogemusi. Too välja teemad, millele oma töös keskendud, erioskused või spetsiifiline kogemus. See aitab patsiendil valida sobiva spetsialisti.</p>
-        <textarea id="f-desc" aria-describedby="desc-hint" value={v.description} onChange={(e) => set("description", e.target.value)} />
+        <textarea id="f-desc" maxLength={5000} aria-describedby="desc-hint" value={v.description} onChange={(e) => set("description", e.target.value)} />
         <label style={{ fontWeight: 400 }}><input type="checkbox" checked={v.wantsGeneratedIntro} onChange={(e) => set("wantsGeneratedIntro", e.target.checked)} /> Koosta minu sisestatud andmete põhjal tutvustav tekst</label>{err("description")}
       </fieldset>
 
@@ -165,7 +165,7 @@ export default function ProfileForm({ value: v, onChange, provenance, errors = {
       <fieldset className="card"><legend><h3>Täiendav teave <span className="muted">(valikuline)</span></h3></legend>
         <p className="hint">Kas soovid lisada teavet, mis aitab patsiendil saada enne visiiti parema ülevaate Sinu tööst ja lähenemisest? See kuvatakse profiili lõpus eraldi jaotisena „Täiendav teave“ – vaata eelvaadet.</p>
         <SectionChoice field="additionalInfo" v={v} set={(s) => setSec("additionalInfo", s)} />
-        <textarea aria-label="Täiendav teave" value={v.additionalInfo} onChange={(e) => set("additionalInfo", e.target.value)} />
+        <textarea maxLength={5000} aria-label="Täiendav teave" value={v.additionalInfo} onChange={(e) => set("additionalInfo", e.target.value)} />
       </fieldset>
     </div>
   );

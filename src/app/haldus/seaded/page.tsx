@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function Settings({ searchParams }: { searchParams: Promise<{ e?: string; ok?: string }> }) {
   const u = await requireStaff();
   const { e, ok } = await searchParams;
+  const settingsMsg = e === "styles" ? "Fotostiilide JSON on vigane või sisaldab lubamatuid väärtusi – seadeid ei salvestatud." : e === "rules" ? "Täielikkuse reeglite JSON on vigane (vaja on massiive required ja observations) – seadeid ei salvestatud." : ok === "settings" ? "Seaded salvestatud." : "";
   const admin = u.role === "ADMIN";
   const services = [
     ["Tekstitöötlus, tõlge, CV/OCR (Claude)", !!process.env.ANTHROPIC_API_KEY],
@@ -25,11 +26,12 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       <h1>{admin ? "Seaded" : "Konto"}</h1>
       <form action={A.changePasswordAction} className="card" style={{ maxWidth: 480 }}>
         <h2 style={{ marginTop: 0 }}>Muuda parooli</h2>
-        {e === "pw" && <p className="notice err">Parool peab olema vähemalt 12 märki.</p>}
+        {e === "pw" && <p className="notice err" role="alert">Parool peab olema vähemalt 12 märki.</p>}
         {ok === "pw" && <p className="notice ok">Parool muudetud.</p>}
         <label htmlFor="pw">Uus parool</label><input id="pw" name="password" type="password" autoComplete="new-password" minLength={12} required />
         <p><button className="small">Salvesta</button></p>
       </form>
+      {settingsMsg && <p id="seaded" className={`notice ${ok ? "ok" : "err"}`} role={ok ? "status" : "alert"}>{settingsMsg}</p>}
       {admin && <AdminSettings services={services} />}
     </div>
   );

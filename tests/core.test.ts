@@ -214,3 +214,18 @@ describe("AI vastusest JSON-i lugemine", async () => {
     expect(extractJson("{katki")).toBeNull();
   });
 });
+
+describe("sisendi piirangud ja tekstid", async () => {
+  const { lengthProblems, emptyProfile: ep, evaluateCompleteness: ev } = await import("../src/lib/profile");
+  it("väga pikk sisend lükatakse arusaadava teatega tagasi", () => {
+    expect(lengthProblems({ ...ep(), description: "x".repeat(5001) })[0]).toMatch(/liiga pikk/);
+    expect(lengthProblems({ ...ep(), titles: ["y".repeat(301)] }).length).toBe(1);
+    expect(lengthProblems({ ...ep(), description: "tavaline" })).toEqual([]);
+  });
+  it("tühja profiili puuduste tekstid on grammatiliselt korrektsed", () => {
+    const reasons = ev(ep(), { hasPhoto: false }).map((f) => f.reason);
+    expect(reasons).toContain("Vastuvõtu keeled on märkimata");
+    expect(reasons).toContain("Hariduse kirjed puuduvad");
+    expect(reasons.join(" ")).not.toMatch(/keeled puudub/);
+  });
+});

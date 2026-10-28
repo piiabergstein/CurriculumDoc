@@ -183,7 +183,7 @@ export function DraftEditor({ specialistId, initial, revision }: { specialistId:
   return (
     <div>
       <ProfileForm value={c} onChange={setC} />
-      <button type="button" onClick={async () => { const r = await A.managerDraftEditAction(specialistId, c, rev); if (r.ok) { setRev(r.revision!); setMsg("Salvestatud. Muudatus vajab arsti kinnitust."); } else setMsg(r.error!); }}>Salvesta mustand</button>
+      <button type="button" onClick={async () => { const r = await A.managerDraftEditAction(specialistId, c, rev); if (r.ok) { setRev(r.revision!); setMsg(r.needsApproval ? "Salvestatud. Sisuline muudatus – profiil suunati arstile uuesti kinnitamiseks; saada arstile kutse." : "Muudatusi polnud."); } else setMsg(r.error!); }}>Salvesta mustand</button>
       {msg && <p role="status" className="notice">{msg}</p>}
     </div>
   );

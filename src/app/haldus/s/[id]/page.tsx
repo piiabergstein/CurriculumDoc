@@ -117,7 +117,7 @@ export default async function SpecialistDetail({ params }: { params: Promise<{ i
         <div className="row" style={{ alignItems: "flex-start" }}>
           {s.photos.map((p) => (
             <figure key={p.id} style={{ width: 170, margin: 0 }}>
-              <img className="photo" src={`/api/photo/${p.id}`} alt={`${p.kind} foto`} loading="lazy" />
+              <img className="photo" src={`/api/photo/${p.id}?w=340`} alt={`${p.kind} foto`} loading="lazy" />
               <figcaption className="hint">{p.kind === "ORIGINAL" ? "Originaal" : p.kind === "PROFESSIONAL" ? "Professionaalne" : "Töödeldud"} · {p.width}×{p.height}<br />{fmt(p.createdAt)}{p.approvedAt && <><br /><span className="badge ok">arsti kinnitatud</span></>}{s.draft!.selectedPhotoId === p.id && <> <span className="badge">valitud</span></>}{(p.settings as { testMode?: boolean })?.testMode && <> <span className="badge warn">TESTREŽIIM</span></>}</figcaption>
             </figure>
           ))}

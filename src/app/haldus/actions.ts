@@ -129,8 +129,15 @@ export async function managerDraftEditAction(specialistId: string, content: unkn
   const u = await requireStaff();
   try {
     const r = await svc.saveDraft(specialistId, content, revision, u.email, "MANAGER");
+    if (r.changed.length) {
+      const sp = await db.specialist.findUniqueOrThrow({ where: { id: specialistId } });
+      if (["DOCTOR_APPROVED", "MARKETING_REVIEW", "READY_TO_PUBLISH", "PUBLISHED"].includes(sp.workflowState)) {
+        await db.specialist.update({ where: { id: specialistId }, data: { workflowState: "DOCTOR_REVIEW" } });
+        await svc.log(specialistId, u.email, "manager_draft_edit_needs_approval", { fields: r.changed });
+      }
+    }
     back(specialistId);
-    return { ok: true, revision: r.revision };
+    return { ok: true, revision: r.revision, needsApproval: r.changed.length > 0 };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Viga" };
   }
@@ -165,14 +172,23 @@ export async function toggleUserAction(userId: string) {
 export async function saveSettingsAction(fd: FormData) {
   const u = await requireStaff("ADMIN");
   const parse = (k: string) => JSON.parse(String(fd.get(k) ?? "{}"));
-  const styles = parse("photoStyles") as Record<string, unknown>;
-  for (const k of Object.keys(styles)) styles[k] = PhotoStyle.parse(styles[k]);
-  const rules = parse("rules") as CompletenessRules;
-  if (!Array.isArray(rules.required) || !Array.isArray(rules.observations)) throw new Error("Reeglid vigased");
+  let styles: Record<string, unknown>, rules: CompletenessRules;
+  try {
+    styles = parse("photoStyles") as Record<string, unknown>;
+    for (const k of Object.keys(styles)) styles[k] = PhotoStyle.parse(styles[k]);
+  } catch {
+    redirect("/haldus/seaded?e=styles#seaded");
+  }
+  try {
+    rules = parse("rules") as CompletenessRules;
+    if (!Array.isArray(rules.required) || !Array.isArray(rules.observations)) throw new Error();
+  } catch {
+    redirect("/haldus/seaded?e=rules#seaded");
+  }
   const months = Math.max(1, Number(fd.get("reviewMonths") ?? 12));
   for (const [key, value] of Object.entries({ photoStyles: styles, completenessRules: rules, reviewMonths: months })) await db.setting.upsert({ where: { key }, create: { key, value: value as object }, update: { value: value as object } });
   await svc.log(null, u.email, "settings_saved");
-  revalidatePath("/haldus/seaded");
+  redirect("/haldus/seaded?ok=settings#seaded");
 }
 export async function addGlossaryAction(fd: FormData) {
   await requireStaff("ADMIN");

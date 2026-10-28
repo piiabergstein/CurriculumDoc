@@ -6,7 +6,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { enqueue, registerJob } from "./jobs";
 import { getTextAI, applyPolish } from "./ai";
-import { ProfileContent, emptyProfile, mergeImport, contentHash, applyRegeneratedTranslation, patientDataSuspicion, diffFields, type FieldMeta, type Translations } from "./profile";
+import { lengthProblems, ProfileContent, emptyProfile, mergeImport, contentHash, applyRegeneratedTranslation, patientDataSuspicion, diffFields, type FieldMeta, type Translations } from "./profile";
 import { buildApprovalSnapshot, managerEditNeedsApproval, ApprovalError, type ApprovalRequest } from "./versioning";
 import { checkQuality, checkFace, stripForStorage, removeBackground, changeClothing, finish, PhotoStyle } from "./photo";
 import { inviteCodeHash, sixDigitCode } from "./security";
@@ -71,16 +71,20 @@ export async function getDraft(specialistId: string) {
 /** Salvestab mustandi optimistliku lukuga. Muutunud väljad saavad päritolu FORM ja märgitakse käsitsi muudetuks. */
 export async function saveDraft(specialistId: string, next: unknown, expectedRevision: number, actor: string, source: "FORM" | "MANAGER" = "FORM") {
   const content = ProfileContent.parse(next);
+  const tooLong = lengthProblems(content);
+  if (tooLong.length) throw new Error(tooLong.join(" "));
   const cur = await getDraft(specialistId);
   if (cur.revision !== expectedRevision) throw new ConflictError("Profiili on vahepeal muudetud (nt teises aknas). Laadi leht uuesti – sinu sisestus on alles brauseris.");
   const before = ProfileContent.parse(cur.content);
   const changed = diffFields(before, content).map((d) => d.field);
   const meta = { ...(cur.fieldMeta as FieldMeta) };
+  // päritolu kirje ainult siis, kui allikas muutub (mitte iga automaatse salvestusega)
+  const newSource = changed.filter((f) => meta[f]?.source !== source || !meta[f]?.manual);
   for (const f of changed) meta[f] = { source, manual: true };
   const updated = await db.profileDraft.updateMany({ where: { specialistId, revision: expectedRevision }, data: { content: J(content), fieldMeta: J(meta), revision: { increment: 1 }, updatedBy: actor } });
   if (updated.count === 0) throw new ConflictError("Profiili on vahepeal muudetud. Laadi leht uuesti.");
   if (changed.length) {
-    await db.factProvenance.createMany({ data: changed.map((field) => ({ specialistId, field, source })) });
+    if (newSource.length) await db.factProvenance.createMany({ data: newSource.map((field) => ({ specialistId, field, source })) });
     const state = (await db.specialist.findUniqueOrThrow({ where: { id: specialistId } })).workflowState;
     if (actor === "arst" && (state === "DRAFT" || state === "PUBLISHED" || state === "READY_TO_PUBLISH" || state === "RETURNED")) {
       await db.specialist.update({ where: { id: specialistId }, data: { workflowState: "DOCTOR_REVIEW" } });

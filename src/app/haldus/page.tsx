@@ -42,7 +42,12 @@ export default async function StaffHome({ searchParams }: { searchParams: Promis
   type Row = (typeof rows)[number];
   const inQueue = (r: Row, k: string): boolean => {
     switch (k) {
-      case "invite": return !r.s.invites[0] || !!r.s.invites[0].revokedAt || r.s.invites[0].expiresAt < new Date() || !r.s.invites[0].sentMarkedAt;
+      case "invite": {
+        // ainult need, kes ootavad arsti tegevust ja kellel pole kehtivat saadetud kutset
+        if (!["DRAFT", "DOCTOR_REVIEW", "RETURNED"].includes(r.s.workflowState)) return r.s.tasks.some((t) => t.type === "REVIEW_REMINDER");
+        const inv = r.s.invites[0];
+        return !inv || !!inv.revokedAt || inv.expiresAt < new Date() || !inv.sentMarkedAt;
+      }
       case "doctor": return r.s.workflowState === "DOCTOR_REVIEW" || r.s.workflowState === "RETURNED";
       case "marketing": return r.s.workflowState === "MARKETING_REVIEW" || r.s.workflowState === "DOCTOR_APPROVED";
       case "ready": return r.s.workflowState === "READY_TO_PUBLISH";

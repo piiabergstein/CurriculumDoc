@@ -82,7 +82,7 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
         <form action={A.logoutAction} style={{ marginLeft: "auto" }}><button className="secondary small">Logi välja</button></form>
       </nav>
       <ol className="steps" aria-label="Edenemine">
-        {STEPS.map((t, i) => <li key={t} aria-current={step === i + 1 ? "step" : undefined}><button type="button" onClick={() => go(i + 1)} style={{ all: "unset", cursor: "pointer" }}>{i + 1}. {t}</button></li>)}
+        {STEPS.map((t, i) => <li key={t} aria-current={step === i + 1 ? "step" : undefined}><button type="button" className="steplink" onClick={() => go(i + 1)}>{i + 1}. {t}</button></li>)}
       </ol>
       <h1 id="step-title" tabIndex={-1}>{step}. {STEPS[step - 1]}</h1>
       {msg && <p className={`notice ${msg.kind}`} role={msg.kind === "err" ? "alert" : "status"}>{msg.text}</p>}
@@ -175,7 +175,7 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
             <p>AI korrastab eestikeelse teksti (kirjavead, vormistus, kordused{content.wantsGeneratedIntro ? ", tutvustus Sinu andmete põhjal" : ""}) ning loob inglise- ja venekeelse versiooni. Uusi fakte ei lisata.</p>
             <button type="button" disabled={active} onClick={async () => { if (await flush()) act(A.startProcessingAction()); }}>{s.draft.aiResult ? "Töötle uuesti" : "Alusta töötlust"}</button>
           </div>
-          <AiResult r={s.draft.aiResult} />
+          <AiResult r={s.draft.aiResult} tags={content.tags} onAddTag={(t) => content.tags.length < 5 && !content.tags.includes(t) && change({ ...content, tags: [...content.tags, t] })} />
           <Nav back={() => go(4)} next={() => go(6)} />
         </div>
       )}
@@ -274,7 +274,7 @@ function Imports({ s, act }: { s: DoctorState; act: Act }) {
   );
 }
 
-function AiResult({ r }: { r: Record<string, unknown> | null }) {
+function AiResult({ r, tags, onAddTag }: { r: Record<string, unknown> | null; tags: string[]; onAddTag: (t: string) => void }) {
   if (!r) return null;
   const x = r as { changes?: { field: string; kind: string; note: string }[]; contradictions?: string[]; questions?: { field: string; question: string }[]; tagSuggestions?: { tag: string; basis: string }[]; introSkippedReason?: string; guardIssues?: string[]; keptManual?: string[]; model?: string; timings?: { polishMs: number; translateMs: number } };
   return (
@@ -286,7 +286,7 @@ function AiResult({ r }: { r: Record<string, unknown> | null }) {
       {!!x.questions?.length && <><h3>Palun täpsusta</h3><ul>{x.questions.map((q, i) => <li key={i}><strong>{FIELD_LABELS[q.field] ?? q.field}:</strong> {q.question}</li>)}</ul></>}
       {!!x.contradictions?.length && <><h3>Tuvastatud vastuolud</h3><ul>{x.contradictions.map((c) => <li key={c}>{c}</li>)}</ul></>}
       {!!x.changes?.length && <><h3>Tehtud muudatused</h3><ul>{x.changes.map((c, i) => <li key={i}>{FIELD_LABELS[c.field] ?? c.field}: {c.note}</li>)}</ul></>}
-      {!!x.tagSuggestions?.length && <><h3>Tag'ide ettepanekud</h3><p className="hint">Lisa sobivad ise sammus 3 – neid ei lisata automaatselt.</p><ul>{x.tagSuggestions.map((t) => <li key={t.tag}><strong>{t.tag}</strong> – alus: {t.basis}</li>)}</ul></>}
+      {!!x.tagSuggestions?.length && <><h3>Tag'ide ettepanekud</h3><p className="hint">Neid ei lisata automaatselt. Vali sobivad (kuni 5); saad neid sammus 3 muuta.</p><ul>{x.tagSuggestions.map((t) => <li key={t.tag}><strong>{t.tag}</strong> – alus: {t.basis} {tags.includes(t.tag) ? <span className="badge ok">lisatud</span> : <button type="button" className="small secondary" disabled={tags.length >= 5} onClick={() => onAddTag(t.tag)}>Lisa</button>}</li>)}</ul></>}
       {!!x.keptManual?.length && <p className="notice">Sinu käsitsi parandatud tõlkeid ({x.keptManual.join(", ")}) ei kirjutatud üle. Uus ettepanek on eelvaates eraldi nähtav.</p>}
     </div>
   );
@@ -360,6 +360,7 @@ function Approve({ s, content, act, back, flush }: { s: DoctorState; content: Pr
         <label style={{ fontWeight: 400 }}><input type="checkbox" checked={stmt} onChange={(e) => setStmt(e.target.checked)} /> {APPROVAL_STATEMENT}</label>
         <div className="row" style={{ justifyContent: "space-between", marginTop: 12 }}>
           <button type="button" className="secondary" onClick={back}>← Tagasi</button>
+          <span className="hint" aria-live="polite">{!langs.et ? "Märgi eestikeelse versiooni kinnitus." : !stmt ? "Märgi kinnituse lause." : photo && !photoOk ? "Kinnita foto või vali sammus 4 teine foto." : ""}</span>
           <button type="button" disabled={!stmt || !langs.et || (!!photo && !photoOk)} onClick={async () => {
             if (!(await flush())) return;
             const ok = await act(A.approveAction({ languages: (Object.keys(langs) as ("et" | "en" | "ru")[]).filter((k) => langs[k]), photoVersionId: photo && photoOk ? photo : null, statementChecked: stmt }));

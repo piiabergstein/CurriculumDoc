@@ -160,6 +160,29 @@ export function isPlaceholder(s: string): boolean {
   return t === "" || PLACEHOLDERS.includes(t);
 }
 
+const MISSING_TEXT: Record<string, string> = {
+  name: "Nimi puudub",
+  titles: "Ametinimetus puudub",
+  age: "Patsientide vanus on märkimata",
+  languages: "Vastuvõtu keeled on märkimata",
+  description: "Vastuvõtu kirjeldus puudub",
+  education: "Hariduse kirjed puuduvad",
+  experience: "Töökogemuse kirjed puuduvad",
+};
+
+export const MAX_LEN = { short: 300, long: 5000 };
+/** Pikkusepiirangud (AI ja paigutuse kaitseks). Tagastab arusaadavad veateated. */
+export function lengthProblems(c: ProfileContent): string[] {
+  const out: string[] = [];
+  if (c.description.length > MAX_LEN.long) out.push(`Vastuvõtu kirjeldus on liiga pikk (${c.description.length}/${MAX_LEN.long} märki).`);
+  if (c.additionalInfo.length > MAX_LEN.long) out.push(`Täiendav teave on liiga pikk (${c.additionalInfo.length}/${MAX_LEN.long} märki).`);
+  const shorts = [c.name, ...c.titles, ...c.memberships, ...c.tags, c.age.note, c.languages.other, ...c.education.flatMap((e) => [e.institution, e.degree]), ...c.experience.flatMap((e) => [e.organization, e.position]), ...c.trainings.flatMap((e) => [e.title, e.organizer]), ...c.publications.flatMap((p) => [p.title, p.url, p.description])];
+  if (shorts.some((s) => s.length > MAX_LEN.short)) out.push(`Mõni väli on liiga pikk (lühiväljad kuni ${MAX_LEN.short} märki).`);
+  const lists = [c.titles, c.education, c.experience, c.trainings, c.memberships, c.publications];
+  if (lists.some((l) => l.length > 50)) out.push("Ühes jaotises võib olla kuni 50 kirjet.");
+  return out;
+}
+
 export type Finding = { field: string; level: "missing" | "observation" | "suspect"; reason: string };
 
 export function evaluateCompleteness(c: ProfileContent, opts: { hasPhoto: boolean; group?: string; rules?: CompletenessRules }): Finding[] {
@@ -175,7 +198,7 @@ export function evaluateCompleteness(c: ProfileContent, opts: { hasPhoto: boolea
     const st = status(field);
     if (st === "not_applicable" || st === "no_publish") return; // teadlik valik
     const v = (c as Record<string, unknown>)[field];
-    if (isEmptyValue(v)) out.push({ field, level, reason: `${FIELD_LABELS[field] ?? field} puudub` });
+    if (isEmptyValue(v)) out.push({ field, level, reason: MISSING_TEXT[field] ?? `${FIELD_LABELS[field] ?? field} puudub` });
   };
   required.forEach((f) => check(f, "missing"));
   rules.observations.filter((f) => !required.includes(f)).forEach((f) => check(f, "observation"));
