@@ -92,21 +92,31 @@ export interface TextAI {
   translate(et: ProfileContent, lang: Exclude<Lang, "et">, glossary: { et: string; en: string; ru: string }[]): Promise<ProfileContent>;
 }
 
+/** Leiab mudeli vastusest esimese JSON-objekti (ka siis, kui see on koodiplokis). */
+export function extractJson(text: string): unknown {
+  const t = text.replace(/```(?:json)?/g, "");
+  const start = t.indexOf("{"), end = t.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    return JSON.parse(t.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
 async function callTool<T>(client: Anthropic, schema: z.ZodType<T, z.ZodTypeDef, unknown>, toolName: string, inputSchema: object, content: Anthropic.MessageParam["content"]): Promise<T> {
   const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
   let lastErr: unknown;
   for (let i = 0; i < 2; i++) {
+    // Tööriistu ei kasutata: kõik mudelid ei toeta sunnitud tööriista. JSON loetakse tekstist ja valideeritakse serveris.
     const res = await client.messages.create({
       model,
       max_tokens: 8000,
       system: SYSTEM,
-      tools: [{ name: toolName, description: "Tagasta tulemus", input_schema: inputSchema as Anthropic.Tool.InputSchema }],
-      // Osa mudeleid ei toeta sunnitud tööriista (tool_choice "tool"/"any") – kasuta "auto" ja nõua kutset juhisega.
-      tool_choice: { type: "auto" },
-      messages: [{ role: "user", content: [...(typeof content === "string" ? [{ type: "text" as const, text: content }] : content), { type: "text" as const, text: `Vasta AINULT tööriista ${toolName} kutsega, ilma muu tekstita.` }] }],
+      messages: [{ role: "user", content: [...(typeof content === "string" ? [{ type: "text" as const, text: content }] : content), { type: "text" as const, text: `Vasta AINULT ühe JSON-objektiga (tulemus "${toolName}"), ilma selgituste ja koodiplokita. JSON Schema:\n${JSON.stringify(inputSchema)}` }] }],
     });
-    const block = res.content.find((b) => b.type === "tool_use");
-    const parsed = schema.safeParse(block && "input" in block ? block.input : null);
+    const text = res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    const parsed = schema.safeParse(extractJson(text));
     if (parsed.success) return parsed.data;
     lastErr = parsed.error;
   }

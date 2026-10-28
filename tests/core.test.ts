@@ -202,3 +202,15 @@ describe("manuaalne režiim: e-posti saatmist pole", () => {
     expect(src).not.toMatch(/nodemailer|sendMail|smtp/i);
   });
 });
+
+describe("AI vastusest JSON-i lugemine", async () => {
+  const { extractJson } = await import("../src/lib/ai");
+  it("loeb JSON-i ka koodiplokist ja ümbritsevast tekstist", () => {
+    expect(extractJson('```json\n{"profile":{"name":"A"}}\n```')).toEqual({ profile: { name: "A" } });
+    expect(extractJson('Siin: {"ok":true,"reason":"x"} aitäh')).toEqual({ ok: true, reason: "x" });
+  });
+  it("vigane vastus => null (skeemikontroll lükkab tagasi)", () => {
+    expect(extractJson("pole json")).toBeNull();
+    expect(extractJson("{katki")).toBeNull();
+  });
+});

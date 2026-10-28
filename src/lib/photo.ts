@@ -1,7 +1,7 @@
 // Fototöötlus: vaikimisi deterministlik (tausta eemaldus + sharp), generatiivne ainult tööriietuse muutmisel.
 import sharp, { type Metadata } from "sharp";
 import { z } from "zod";
-import { isTestMode, ServiceNotConfigured } from "./ai";
+import { isTestMode, ServiceNotConfigured, extractJson } from "./ai";
 
 export const PhotoStyle = z.object({
   name: z.string().default("Vaikimisi"),
@@ -55,12 +55,10 @@ export async function checkFace(buf: Buffer): Promise<{ checked: boolean; ok: bo
   const res = await client.messages.create({
     model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
     max_tokens: 300,
-    tools: [{ name: "face_check", description: "Tulemus", input_schema: { type: "object", properties: { ok: { type: "boolean" }, reason: { type: "string" } }, required: ["ok", "reason"] } }],
-    tool_choice: { type: "auto" },
-    messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: small.toString("base64") } }, { type: "text", text: "Kas see sobib profiilifoto töötluseks: üks inimene, nägu selgelt nähtav ja eestvaates, ei ole kaetud (päikeseprillid, käsi), pea ja õlad kaadris? Vasta AINULT tööriista face_check kutsega, eesti keeles, reason = lühike juhis arstile." }] }],
+    messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: small.toString("base64") } }, { type: "text", text: 'Kas see sobib profiilifoto töötluseks: üks inimene, nägu selgelt nähtav ja eestvaates, ei ole kaetud (päikeseprillid, käsi), pea ja õlad kaadris? Vasta AINULT JSON-iga {"ok": true/false, "reason": "lühike juhis arstile eesti keeles"}.' }] }],
   });
-  const b = res.content.find((x) => x.type === "tool_use");
-  const p = z.object({ ok: z.boolean(), reason: z.string() }).safeParse(b && "input" in b ? b.input : null);
+  const text = res.content.map((x) => (x.type === "text" ? x.text : "")).join("");
+  const p = z.object({ ok: z.boolean(), reason: z.string() }).safeParse(extractJson(text));
   return p.success ? { checked: true, ...p.data } : { checked: false, ok: true, reason: "Näo kontrolli tulemus oli loetamatu." };
 }
 
