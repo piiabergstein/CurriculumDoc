@@ -262,8 +262,11 @@ export async function requestPhotoProcessing(specialistId: string, originalId: s
   const style = await photoStyleFor(sp.group);
   const count = await db.photoVersion.count({ where: { specialistId, parentId: originalId, kind: "PROCESSED" } });
   if (count >= style.maxRegenerations) throw new Error(`Uuesti genereerimise piir (${style.maxRegenerations}) on täis. Palu abi haldurilt.`);
+  // topeltkäivitus on välistatud ootava/käiva töö kaudu; ebaõnnestunud katse järel saab alati uuesti proovida
+  const active = await db.job.findFirst({ where: { specialistId, type: "photo", status: { in: ["queued", "running"] } } });
+  if (active) return active;
   const clothing = Boolean(opts.clothing), plain = Boolean(opts.plain);
-  return enqueue("photo", { specialistId, originalId, clothing, plain, n: count + 1 }, { specialistId, dedupeKey: `photo:${originalId}:${count + 1}:${clothing}:${plain}` });
+  return enqueue("photo", { specialistId, originalId, clothing, plain, n: count + 1 }, { specialistId });
 }
 
 registerJob("photo", async (job, stage) => {
