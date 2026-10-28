@@ -94,6 +94,7 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
       </ol>
       <h1 id="step-title" tabIndex={-1}>{step}. {STEPS[step - 1]}</h1>
       {msg && <p className={`notice ${msg.kind}`} role={msg.kind === "err" ? "alert" : "status"}>{msg.text}</p>}
+      <StatusBanner s={s} />
       <Jobs jobs={s.jobs} onRetry={(id) => act(A.retryJobAction(id))} />
 
       {step === 1 && (
@@ -194,6 +195,18 @@ export default function Wizard({ initial }: { initial: DoctorState }) {
       {step === 7 && <Approve s={s} content={content} act={act} back={() => go(6)} flush={flush} />}
     </div>
   );
+}
+
+/** Arstile nähtav töövoo seis: kas kinnitus on tehtud või turundus palub parandusi. */
+function StatusBanner({ s }: { s: DoctorState }) {
+  const st = s.specialist.workflowState;
+  const v = s.latestVersion;
+  if (st === "RETURNED") return <div className="notice warn" role="status"><strong>Turundus palub profiili parandada.</strong>{s.returnNote ? <> Põhjus: „{s.returnNote}“</> : null} Tee muudatused ja kinnita profiil uuesti sammus 7.</div>;
+  if (v && ["DOCTOR_APPROVED", "MARKETING_REVIEW", "READY_TO_PUBLISH", "PUBLISHED"].includes(st)) {
+    const where = st === "PUBLISHED" ? "on veebis avaldatud" : st === "READY_TO_PUBLISH" ? "ootab avaldamist" : "on turunduse ülevaatusel";
+    return <div className="notice ok" role="status">Kinnitasid profiili (versioon {v.number}, {new Date(v.createdAt).toLocaleDateString("et-EE", { timeZone: "Europe/Tallinn" })}) ja see {where}. Kui teed muudatusi, tuleb need uuesti kinnitada – kinnitatud versioon jääb seni alles.</div>;
+  }
+  return null;
 }
 
 type Act = (p: Promise<{ ok: boolean; error?: string }>, okText?: string) => Promise<boolean>;

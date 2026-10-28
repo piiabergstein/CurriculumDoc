@@ -33,6 +33,7 @@ const PROFILE_JSON_SCHEMA = {
     memberships: { type: "array", items: { type: "string" } },
     publications: { type: "array", items: { type: "object", properties: { kind: { type: "string", enum: ["research", "article", "media"] }, title: { type: "string" }, url: { type: "string" }, year: { type: "string" }, description: { type: "string" } } } },
     additionalInfo: { type: "string" },
+    tags: { type: "array", items: { type: "string" } },
   },
 } as const;
 
@@ -146,9 +147,10 @@ Paku kuni 5 tag'i ainult selgelt sisendis olevate teemade põhjal (mitte teenuse
   }
   async translate(et: ProfileContent, lang: "en" | "ru", glossary: { et: string; en: string; ru: string }[]) {
     const g = glossary.map((t) => `${t.et} = ${t[lang]}`).join("\n");
-    const text = `Tõlgi profiil ${lang === "en" ? "inglise" : "vene"} keelde. Säilita nimed, aastaarvud, asutuste nimed ja kvalifikatsioonide täpne tähendus; ära omista kõrgemat kvalifikatsiooni. Kasuta terminisõnastikku:\n${g || "(tühi)"}\nÄra tõlgi välja 'languages' ega 'age.mode' koode.\n<input>${JSON.stringify(et)}</input>`;
+    const text = `Tõlgi profiil ${lang === "en" ? "inglise" : "vene"} keelde. Säilita nimed, aastaarvud, asutuste nimed ja kvalifikatsioonide täpne tähendus; ära omista kõrgemat kvalifikatsiooni. Kasuta terminisõnastikku:\n${g || "(tühi)"}\nÄra tõlgi välja 'languages' ega 'age.mode' koode. Tõlgi ka 'tags' (sama arv ja järjekord). Arsti sugu pole teada: vali sooneutraalsed sõnastused (nt vene keeles ära kasuta arsti kohta sootunnusega minevikuvorme ega omadussõnu; kirjuta „основное внимание уделяю“, mitte „сосредоточен“).\n<input>${JSON.stringify(et)}</input>`;
     const out = await callTool(this.client, TranslateOutput, "translated_profile", { type: "object", properties: { profile: PROFILE_JSON_SCHEMA, notes: { type: "array", items: { type: "string" } } }, required: ["profile"] }, [{ type: "text", text }]);
-    return ProfileContent.parse({ ...et, ...out.profile, languages: et.languages, age: { ...et.age, note: out.profile.age?.note ?? et.age.note }, sections: et.sections });
+    const tags = out.profile.tags?.length === et.tags.length ? out.profile.tags : et.tags; // tõlge ei tohi tag'e lisada ega eemaldada
+    return ProfileContent.parse({ ...et, ...out.profile, tags, languages: et.languages, age: { ...et.age, note: out.profile.age?.note ?? et.age.note }, sections: et.sections });
   }
 }
 

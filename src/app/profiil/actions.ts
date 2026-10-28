@@ -29,6 +29,7 @@ export async function loadState() {
     db.profileVersion.findMany({ where: { specialistId: id }, orderBy: { number: "desc" }, take: 1, select: { id: true, number: true, createdAt: true } }),
   ]);
   const style = await svc.photoStyleFor(sp.group);
+  const returnNote = sp.workflowState === "RETURNED" ? (await db.internalNote.findFirst({ where: { specialistId: id, text: { startsWith: "Tagastatud arstile:" } }, orderBy: { createdAt: "desc" } }))?.text.replace("Tagastatud arstile:", "").trim() ?? "" : "";
   const et = ProfileContent.parse(draft.content);
   const tr = draft.translations as Translations & Record<string, unknown>;
   return {
@@ -45,6 +46,7 @@ export async function loadState() {
     conflicts: conflicts.map((c) => ({ id: c.id, field: c.field, current: c.currentValue, imported: c.importedValue, sourceRef: c.sourceRef, excerpt: c.excerpt })),
     jobs: jobs.map((j) => ({ ...j, createdAt: j.createdAt.toISOString() })),
     findings: evaluateCompleteness(et, { hasPhoto: photos.length > 0, group: sp.group }),
+    returnNote,
     latestVersion: versions[0] ? { ...versions[0], createdAt: versions[0].createdAt.toISOString() } : null,
   };
 }
